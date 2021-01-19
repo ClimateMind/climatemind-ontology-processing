@@ -2,8 +2,8 @@
 
 import os
 import argparse
-import process_new_ontology_file
-import visualize.visualize as visualize
+import ontology_processing.process_new_ontology_file as process_new_ontology_file
+import ontology_processing.visualize.visualize as visualize
 
 
 def main(args):
