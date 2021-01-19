@@ -37,13 +37,9 @@ def main(args):
     example: python3 process_new_ontology_file.py "./climate_mind_ontology20200721.owl"
     """
     # set arguments
-    current_directory = os.getcwd()
+    output_folder_path = args.output
 
-    output_folder_path = os.path.join(current_directory, "Output")
-    if args.output_folder:
-        output_folder_path = args.output
-
-    onto_path = os.path.join(current_directory, "PUT_NEW_OWL_FILE_IN_HERE/climate_mind_ontology")
+    onto_path = args.OWL_file
 
     # process the OWL ontology file
     processOntology(onto_path=onto_path, output_folder_path=output_folder_path)
@@ -53,7 +49,10 @@ if __name__ == "__main__":
         description='From a new ontology OWL file, process it, and files needed by Climate Mind app and associated scripts like visualize.py. Be sure to run from the "backend" folder (not from "knowledge_graph")'
     )
     parser.add_argument(
-        "-output_folder", type=str, help="path to alternative output folder"
+        "OWL_file", type=str, help="path to OWL file"
+    )
+    parser.add_argument(
+        "output_folder", type=str, help="Path to output folder"
     )
 
     args = parser.parse_args()
