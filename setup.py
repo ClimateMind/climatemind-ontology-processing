@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="climatemind-ontology-processing",
-    version="1.0.0",
+    version="1.0.1",
     description="Climate Mind ontology processing code.",
     author="ClimateMind",
     url="https://github.com/ClimateMind/climatemind-ontology-processing",
