@@ -10,7 +10,7 @@ processing and visualization for the ontology.
 Be sure git is installed on your computer first.
 Then, install the package via pip install:
 pip install git+https://github.com/ClimateMind/climatemind-ontology-processing.git
-(be sure you have installed all requirements first by doing: pip install -r git+https://github.com/ClimateMind/climatemind-ontology-processing/requirements.txt)
+(be sure you have installed all requirements first by doing: pip install -r https://raw.githubusercontent.com/ClimateMind/climatemind-ontology-processing/main/requirements.txt)
 
 
 
