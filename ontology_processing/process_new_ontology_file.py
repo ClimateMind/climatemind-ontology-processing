@@ -19,9 +19,7 @@ def processOntology(onto_path, output_folder_path):
     csv_path = os.path.join(output_folder_path, "output.csv")
 
     # get the network edges from the OWL ontology object
-    make_network.outputEdges(
-        onto_path=onto_path, output_path=csv_path, source=None
-    )
+    make_network.outputEdges(onto_path=onto_path, output_path=csv_path, source=None)
 
     # from the network edges, make a networkx graph and save as a pickle file
     make_graph.makeGraph(onto_path, csv_path, output_folder_path)
@@ -44,16 +42,13 @@ def main(args):
     # process the OWL ontology file
     processOntology(onto_path=onto_path, output_folder_path=output_folder_path)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='From a new ontology OWL file, process it, and files needed by Climate Mind app and associated scripts like visualize.py. Be sure to run from the "backend" folder (not from "knowledge_graph")'
     )
-    parser.add_argument(
-        "OWL_file", type=str, help="path to OWL file"
-    )
-    parser.add_argument(
-        "output_folder", type=str, help="Path to output folder"
-    )
+    parser.add_argument("OWL_file", type=str, help="path to OWL file")
+    parser.add_argument("output_folder", type=str, help="Path to output folder")
 
     args = parser.parse_args()
     main(args)

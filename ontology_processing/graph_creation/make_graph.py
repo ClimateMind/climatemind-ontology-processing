@@ -266,25 +266,22 @@ def set_edge_properties(G):
         node_b = edge[1]
         edge_attributes_dict = {}
         for prop in G.nodes[node_a]["properties"].keys():
-            if prop in source_types:
-                intersection = set(G.nodes[node_a]["properties"][prop]) & set(
-                    G.nodes[node_b]["properties"][prop]
-                )
+            if prop in source_types: #ensures only the source_types above are considered
+                node_a_prop_sources = set(G.nodes[node_a]["properties"][prop])
+                node_b_prop_sources = set(G.nodes[node_b]["properties"][prop])
+                intersection = node_a_prop_sources & node_b_prop_sources
 
+                # add intersection to edge property dictionary, ensuring if items already exist for that key, then they are added to the list
                 if intersection:
-                    # add intersection to edge property dictionary, ensuring if items already exist for that key, then they are added to the list
-                    if prop in edge_attributes_dict.keys():
-                        edge_attributes_dict[prop] = edge_attributes_dict[prop].extend(
-                            list(intersection)
-                        )
-                    else:
-                        edge_attributes_dict[prop] = list(intersection)
+                    edge_attributes_dict[prop] = list(intersection)
+                    
                     if (node_a, prop) in to_remove.keys():
                         to_remove[(node_a, prop)] = (
                             to_remove[(node_a, prop)] | intersection
                         )
                     else:
                         to_remove[(node_a, prop)] = intersection
+
                     if (node_b, prop) in to_remove.keys():
                         to_remove[(node_b, prop)] = (
                             to_remove[(node_b, prop)] | intersection
@@ -302,11 +299,11 @@ def set_edge_properties(G):
         #     "properties",
         # )
 
-    return list(to_remove)
+    return to_remove
 
 
 def remove_edge_properties_from_nodes(G, to_remove):
-    """Remove properties from Networkx nodes that occur on both nodes of an edge
+    """Remove sources from properties from Networkx nodes when those sources occur on both nodes of an edge
     (because it marks that property is only for the edge).
 
     Parameters
@@ -315,15 +312,16 @@ def remove_edge_properties_from_nodes(G, to_remove):
     to_remove: A dictionary of nodes and properties
     """
     for item in to_remove:
+        #the node to remove sources from
         node = item[0]
+
+        #the property type that has sources to remove
         prop = item[1]
-        to_delete = item
-        G.nodes[node]["properties"][prop] = [
-            node
-            for node in list(G.nodes[node]["properties"][prop])
-            if node not in list(to_delete)
-        ]
-        # DM: uh... won't `node not in list(to_delete)` always evaluate to false? What was meant to be here instead?
+
+        #the list of actual sources to remove
+        sources_before_removing = set(G.nodes[node]["properties"][prop])
+        sources_after_removing = list( sources_before_removing - to_remove[item] )
+        G.nodes[node]["properties"][prop] = sources_after_removing
 
 
 def make_acyclic(G):
@@ -641,7 +639,7 @@ def makeGraph(onto_path, edge_path, output_folder_path):
             if G[myth][neighbor]["type"] == "is_a_myth_about":
 
                 impact_myths = []
-                
+
                 if "risk solution" in G.nodes[neighbor].keys():
                     if "solution myths" not in G.nodes[neighbor].keys():
                         solution_myths = []
