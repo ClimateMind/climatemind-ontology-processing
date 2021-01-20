@@ -266,7 +266,9 @@ def set_edge_properties(G):
         node_b = edge[1]
         edge_attributes_dict = {}
         for prop in G.nodes[node_a]["properties"].keys():
-            if prop in source_types: #ensures only the source_types above are considered
+            if (
+                prop in source_types
+            ):  # ensures only the source_types above are considered
                 node_a_prop_sources = set(G.nodes[node_a]["properties"][prop])
                 node_b_prop_sources = set(G.nodes[node_b]["properties"][prop])
                 intersection = node_a_prop_sources & node_b_prop_sources
@@ -274,7 +276,7 @@ def set_edge_properties(G):
                 # add intersection to edge property dictionary, ensuring if items already exist for that key, then they are added to the list
                 if intersection:
                     edge_attributes_dict[prop] = list(intersection)
-                    
+
                     if (node_a, prop) in to_remove.keys():
                         to_remove[(node_a, prop)] = (
                             to_remove[(node_a, prop)] | intersection
@@ -312,15 +314,15 @@ def remove_edge_properties_from_nodes(G, to_remove):
     to_remove: A dictionary of nodes and properties
     """
     for item in to_remove:
-        #the node to remove sources from
+        # the node to remove sources from
         node = item[0]
 
-        #the property type that has sources to remove
+        # the property type that has sources to remove
         prop = item[1]
 
-        #the list of actual sources to remove
+        # the list of actual sources to remove
         sources_before_removing = set(G.nodes[node]["properties"][prop])
-        sources_after_removing = list( sources_before_removing - to_remove[item] )
+        sources_after_removing = list(sources_before_removing - to_remove[item])
         G.nodes[node]["properties"][prop] = sources_after_removing
 
 
