@@ -1,6 +1,6 @@
 # climatemind-ontology-processing
 
-The ontology is stored as an RDF/XML file which we convert to a NetworkX Graph using
+The ontology is stored as an OWL file (a type of RDF/XML file) which we convert to a NetworkX Graph using
 Owlready2 (a Python library for processing an ontology). These files handle all of the
 processing and visualization for the ontology.
 
