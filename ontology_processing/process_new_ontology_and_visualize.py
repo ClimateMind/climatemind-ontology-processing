@@ -23,7 +23,9 @@ def main(args):
     if args.output_folder:
         output_folder_path = args.output
 
-    onto_path = os.path.join(current_directory, "PUT_NEW_OWL_FILE_IN_HERE/climate_mind_ontology")
+    onto_path = os.path.join(
+        current_directory, "PUT_NEW_OWL_FILE_IN_HERE/climate_mind_ontology"
+    )
 
     # build gpickle_path
     gpickle_path = os.path.join(output_folder_path, "Climate_Mind_DiGraph.gpickle")

@@ -1,12 +1,6 @@
-# Ontology Files (and ontology processing input files)
+# Ontology Files
 climate_mind_ontology
 *.owl
-
-#ontology processessing output files
-*.json
-*.gpickle
-*.egg-info
-*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
