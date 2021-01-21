@@ -6,6 +6,7 @@ climate_mind_ontology
 *.json
 *.gpickle
 *.egg-info
+*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
