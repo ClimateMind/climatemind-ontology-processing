@@ -554,12 +554,7 @@ def makeGraph(onto_path, edge_path, output_folder_path):
                 mitigation_solutions.append(neighbor)
 
     mitigation_solutions = list(set(mitigation_solutions))
-    # update the networkx object to have a 'mitigation solutions' field and include in it all nodes from mitigation_solutions
-    nx.set_node_attributes(
-        G,
-        {"increase in greenhouse effect": mitigation_solutions},
-        "mitigation solutions",
-    )
+    
 
     # sort the mitigation solutions from highest to lowest CO2 Equivalent Reduced / Sequestered (2020–2050)
     # in Gigatons from Project Drawdown scenario 2
@@ -587,6 +582,17 @@ def makeGraph(onto_path, edge_path, output_folder_path):
     mitigation_solutions_co2_sorted.extend(mitigation_solutions_no_co2)
 
     mitigation_solutions = mitigation_solutions_co2_sorted
+
+
+
+    # update the networkx object to have a 'mitigation solutions' field and include in it all nodes from mitigation_solutions
+    nx.set_node_attributes(
+        G,
+        {"increase in greenhouse effect": mitigation_solutions},
+        "mitigation solutions",
+    )
+
+
     
     # add solution sources field to all mitigation solution nodes
     for solution in mitigation_solutions:
