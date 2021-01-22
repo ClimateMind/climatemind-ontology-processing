@@ -561,6 +561,33 @@ def makeGraph(onto_path, edge_path, output_folder_path):
         "mitigation solutions",
     )
 
+    # sort the mitigation solutions from highest to lowest CO2 Equivalent Reduced / Sequestered (2020–2050)
+    # in Gigatons from Project Drawdown scenario 2
+
+    mitigation_solutions_with_co2 = dict()
+    mitigation_solutions_no_co2 = []
+
+    for solution in mitigation_solutions:
+        if (
+            solution not in mitigation_solutions_with_co2
+            and G.nodes[solution]["data_properties"]["CO2_eq_reduced"]
+        ):
+            mitigation_solutions_with_co2[solution] = G.nodes[solution][
+                "data_properties"
+            ]["CO2_eq_reduced"]
+        elif solution not in mitigation_solutions_no_co2:
+            mitigation_solutions_no_co2.append(solution)
+
+    mitigation_solutions_co2_sorted = sorted(
+        mitigation_solutions_with_co2,
+        key=mitigation_solutions_with_co2.get,
+        reverse=True,
+    )
+
+    mitigation_solutions_co2_sorted.extend(mitigation_solutions_no_co2)
+
+    mitigation_solutions = mitigation_solutions_co2_sorted
+    
     # add solution sources field to all mitigation solution nodes
     for solution in mitigation_solutions:
         sources = solution_sources(G.nodes[solution], source_types)
