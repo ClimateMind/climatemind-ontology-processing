@@ -587,7 +587,7 @@ def makeGraph(onto_path, edge_path, output_folder_path):
     mitigation_solutions_co2_sorted.extend(mitigation_solutions_no_co2)
 
     mitigation_solutions = mitigation_solutions_co2_sorted
-    
+
     # add solution sources field to all mitigation solution nodes
     for solution in mitigation_solutions:
         sources = solution_sources(G.nodes[solution], source_types)
@@ -713,6 +713,21 @@ def makeGraph(onto_path, edge_path, output_folder_path):
         {"increase in greenhouse effect": general_myths},
         "general myths",
     )
+
+    # sort the myths by popularity (skeptical science)
+
+    general_myths_dict = dict()
+
+    for myth in general_myths:
+        general_myths_dict[myth] = G.nodes[myth]["data_properties"]["myth_frequency"]
+
+    general_myths_sorted = sorted(
+        general_myths_dict,
+        key=general_myths_dict.get,
+        reverse=True,
+    )
+
+    general_myths = general_myths_sorted
 
     # to check or obtain the solutions from the networkx object: G.nodes[node]['adaptation solutions']
     # ex: G.nodes['decrease in test scores']['adaptation solutions']
