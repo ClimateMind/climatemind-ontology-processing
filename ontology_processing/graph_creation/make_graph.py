@@ -265,37 +265,31 @@ def set_edge_properties(G):
         node_a = edge[0]
         node_b = edge[1]
         edge_attributes_dict = {}
+        for prop in G.nodes[node_a]["properties"].keys():
+            if (
+                prop in source_types
+            ):  # ensures only the source_types above are considered
+                node_a_prop_sources = set(G.nodes[node_a]["properties"][prop])
+                node_b_prop_sources = set(G.nodes[node_b]["properties"][prop])
+                intersection = node_a_prop_sources & node_b_prop_sources
 
-        if (
-            G[node_a][node_b]["type"]
-            != "is_inhibited_or_prevented_or_blocked_or_slowed_by"
-        ):
+                # add intersection to edge property dictionary, ensuring if items already exist for that key, then they are added to the list
+                if intersection:
+                    edge_attributes_dict[prop] = list(intersection)
 
-            for prop in G.nodes[node_a]["properties"].keys():
-                if (
-                    prop in source_types
-                ):  # ensures only the source_types above are considered
-                    node_a_prop_sources = set(G.nodes[node_a]["properties"][prop])
-                    node_b_prop_sources = set(G.nodes[node_b]["properties"][prop])
-                    intersection = node_a_prop_sources & node_b_prop_sources
+                    if (node_a, prop) in to_remove.keys():
+                        to_remove[(node_a, prop)] = (
+                            to_remove[(node_a, prop)] | intersection
+                        )
+                    else:
+                        to_remove[(node_a, prop)] = intersection
 
-                    # add intersection to edge property dictionary, ensuring if items already exist for that key, then they are added to the list
-                    if intersection:
-                        edge_attributes_dict[prop] = list(intersection)
-
-                        if (node_a, prop) in to_remove.keys():
-                            to_remove[(node_a, prop)] = (
-                                to_remove[(node_a, prop)] | intersection
-                            )
-                        else:
-                            to_remove[(node_a, prop)] = intersection
-
-                        if (node_b, prop) in to_remove.keys():
-                            to_remove[(node_b, prop)] = (
-                                to_remove[(node_b, prop)] | intersection
-                            )
-                        else:
-                            to_remove[(node_b, prop)] = intersection
+                    if (node_b, prop) in to_remove.keys():
+                        to_remove[(node_b, prop)] = (
+                            to_remove[(node_b, prop)] | intersection
+                        )
+                    else:
+                        to_remove[(node_b, prop)] = intersection
 
         # add edge_attributes_dict to edge
         G.add_edge(node_a, node_b, properties=edge_attributes_dict)
@@ -560,6 +554,7 @@ def makeGraph(onto_path, edge_path, output_folder_path):
                 mitigation_solutions.append(neighbor)
 
     mitigation_solutions = list(set(mitigation_solutions))
+    
 
     # sort the mitigation solutions from highest to lowest CO2 Equivalent Reduced / Sequestered (2020–2050)
     # in Gigatons from Project Drawdown scenario 2
@@ -714,6 +709,7 @@ def makeGraph(onto_path, edge_path, output_folder_path):
 
     # get unique general myths
     general_myths = list(dict.fromkeys(general_myths))
+    
 
     # sort the myths by popularity (skeptical science)
     general_myths_dict = dict()
@@ -729,12 +725,15 @@ def makeGraph(onto_path, edge_path, output_folder_path):
 
     general_myths = general_myths_sorted
 
+
     # update the networkx object to have a 'general myths' field and include in it all nodes from mitigation_solutions
     nx.set_node_attributes(
         G,
         {"increase in greenhouse effect": general_myths},
         "general myths",
     )
+
+
 
     # to check or obtain the solutions from the networkx object: G.nodes[node]['adaptation solutions']
     # ex: G.nodes['decrease in test scores']['adaptation solutions']
