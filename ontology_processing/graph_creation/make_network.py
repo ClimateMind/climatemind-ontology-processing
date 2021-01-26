@@ -2,7 +2,7 @@ import argparse
 
 import pandas as pd
 from owlready2 import *
-from ontology_processing.graph_creation.network_class import Network
+from graph_creation.network_class import Network
 
 
 def test_answer():

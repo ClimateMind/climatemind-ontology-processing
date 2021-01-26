@@ -2,8 +2,8 @@
 
 import os
 import argparse
-import ontology_processing.graph_creation.make_network as make_network
-import ontology_processing.graph_creation.make_graph as make_graph
+import graph_creation.make_network as make_network
+import graph_creation.make_graph as make_graph
 
 
 def processOntology(onto_path, output_folder_path):
@@ -35,7 +35,7 @@ def main(args):
     example: python3 process_new_ontology_file.py "./climate_mind_ontology20200721.owl"
     """
     # set arguments
-    output_folder_path = args.output
+    output_folder_path = args.output_folder
 
     onto_path = args.OWL_file
 
