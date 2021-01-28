@@ -5,7 +5,7 @@ from owlready2 import *
 
 try:
     from graph_creation.network_class import Network
-except:
+except ImportError:
     from ontology_processing.graph_creation.network_class import Network
 
 

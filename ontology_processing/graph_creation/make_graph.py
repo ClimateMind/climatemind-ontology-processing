@@ -19,7 +19,7 @@ try:
         remove_non_test_nodes,
         get_test_ontology,
     )
-except:
+except ImportError:
     from ontology_processing.graph_creation.ontology_processing_utils import (
         give_alias,
         save_test_ontology_to_json,
