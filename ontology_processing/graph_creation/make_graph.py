@@ -265,31 +265,36 @@ def set_edge_properties(G):
         node_a = edge[0]
         node_b = edge[1]
         edge_attributes_dict = {}
-        for prop in G.nodes[node_a]["properties"].keys():
-            if (
-                prop in source_types
-            ):  # ensures only the source_types above are considered
-                node_a_prop_sources = set(G.nodes[node_a]["properties"][prop])
-                node_b_prop_sources = set(G.nodes[node_b]["properties"][prop])
-                intersection = node_a_prop_sources & node_b_prop_sources
 
-                # add intersection to edge property dictionary, ensuring if items already exist for that key, then they are added to the list
-                if intersection:
-                    edge_attributes_dict[prop] = list(intersection)
+         if (
+            G[node_a][node_b]["type"]
+            != "is_inhibited_or_prevented_or_blocked_or_slowed_by"
+        ):
+            for prop in G.nodes[node_a]["properties"].keys():
+                if (
+                    prop in source_types
+                ):  # ensures only the source_types above are considered
+                    node_a_prop_sources = set(G.nodes[node_a]["properties"][prop])
+                    node_b_prop_sources = set(G.nodes[node_b]["properties"][prop])
+                    intersection = node_a_prop_sources & node_b_prop_sources
 
-                    if (node_a, prop) in to_remove.keys():
-                        to_remove[(node_a, prop)] = (
-                            to_remove[(node_a, prop)] | intersection
-                        )
-                    else:
-                        to_remove[(node_a, prop)] = intersection
+                    # add intersection to edge property dictionary, ensuring if items already exist for that key, then they are added to the list
+                    if intersection:
+                        edge_attributes_dict[prop] = list(intersection)
 
-                    if (node_b, prop) in to_remove.keys():
-                        to_remove[(node_b, prop)] = (
-                            to_remove[(node_b, prop)] | intersection
-                        )
-                    else:
-                        to_remove[(node_b, prop)] = intersection
+                        if (node_a, prop) in to_remove.keys():
+                            to_remove[(node_a, prop)] = (
+                                to_remove[(node_a, prop)] | intersection
+                            )
+                        else:
+                            to_remove[(node_a, prop)] = intersection
+
+                        if (node_b, prop) in to_remove.keys():
+                            to_remove[(node_b, prop)] = (
+                                to_remove[(node_b, prop)] | intersection
+                            )
+                        else:
+                            to_remove[(node_b, prop)] = intersection
 
         # add edge_attributes_dict to edge
         G.add_edge(node_a, node_b, properties=edge_attributes_dict)
