@@ -9,15 +9,27 @@ import owlready2
 from owlready2 import get_ontology, sync_reasoner
 from collections import OrderedDict
 
-from graph_creation.ontology_processing_utils import (
-    give_alias,
-    save_test_ontology_to_json,
-    save_graph_to_pickle,
-    get_valid_test_ont,
-    get_non_test_ont,
-    remove_non_test_nodes,
-    get_test_ontology,
-)
+try:
+    from graph_creation.ontology_processing_utils import (
+        give_alias,
+        save_test_ontology_to_json,
+        save_graph_to_pickle,
+        get_valid_test_ont,
+        get_non_test_ont,
+        remove_non_test_nodes,
+        get_test_ontology,
+    )
+except:
+     from ontology_processing.graph_creation.ontology_processing_utils import (
+        give_alias,
+        save_test_ontology_to_json,
+        save_graph_to_pickle,
+        get_valid_test_ont,
+        get_non_test_ont,
+        remove_non_test_nodes,
+        get_test_ontology,
+    )
+
 import os
 
 
