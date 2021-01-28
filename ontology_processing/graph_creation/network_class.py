@@ -4,7 +4,7 @@ from owlready2 import *
 
 try:
     from graph_creation.ontology_processing_utils import give_alias
-except:
+except ImportError:
     from ontology_processing.graph_creation.ontology_processing_utils import give_alias
 
 
