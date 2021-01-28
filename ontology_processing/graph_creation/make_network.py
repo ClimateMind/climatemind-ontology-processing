@@ -4,7 +4,7 @@ import pandas as pd
 from owlready2 import *
 
 try:
-    from graph_creation.network_class import Network
+    from network_class import Network
 except ImportError:
     from ontology_processing.graph_creation.network_class import Network
 
