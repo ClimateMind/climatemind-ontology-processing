@@ -266,10 +266,11 @@ def set_edge_properties(G):
         node_b = edge[1]
         edge_attributes_dict = {}
 
-         if (
+        if (
             G[node_a][node_b]["type"]
             != "is_inhibited_or_prevented_or_blocked_or_slowed_by"
         ):
+
             for prop in G.nodes[node_a]["properties"].keys():
                 if (
                     prop in source_types
@@ -559,7 +560,6 @@ def makeGraph(onto_path, edge_path, output_folder_path):
                 mitigation_solutions.append(neighbor)
 
     mitigation_solutions = list(set(mitigation_solutions))
-    
 
     # sort the mitigation solutions from highest to lowest CO2 Equivalent Reduced / Sequestered (2020–2050)
     # in Gigatons from Project Drawdown scenario 2
@@ -714,7 +714,6 @@ def makeGraph(onto_path, edge_path, output_folder_path):
 
     # get unique general myths
     general_myths = list(dict.fromkeys(general_myths))
-    
 
     # sort the myths by popularity (skeptical science)
     general_myths_dict = dict()
@@ -730,15 +729,12 @@ def makeGraph(onto_path, edge_path, output_folder_path):
 
     general_myths = general_myths_sorted
 
-
     # update the networkx object to have a 'general myths' field and include in it all nodes from mitigation_solutions
     nx.set_node_attributes(
         G,
         {"increase in greenhouse effect": general_myths},
         "general myths",
     )
-
-
 
     # to check or obtain the solutions from the networkx object: G.nodes[node]['adaptation solutions']
     # ex: G.nodes['decrease in test scores']['adaptation solutions']

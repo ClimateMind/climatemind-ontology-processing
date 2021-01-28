@@ -1,9 +1,7 @@
-# From an input OWL file, process it to make files needed for Climate Mind app production and to run helper scripts like visualize.py. Be sure to run from the "backend" folder (not from "knowledge_graph")
-
 import os
 import argparse
-import ontology_processing.graph_creation.make_network as make_network
-import ontology_processing.graph_creation.make_graph as make_graph
+import graph_creation.make_network as make_network
+import graph_creation.make_graph as make_graph
 
 
 def processOntology(onto_path, output_folder_path):
