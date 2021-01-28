@@ -10,7 +10,7 @@ from owlready2 import get_ontology, sync_reasoner
 from collections import OrderedDict
 
 try:
-    from ontology_processing_utils import (
+    from graph_creation.ontology_processing_utils import (
         give_alias,
         save_test_ontology_to_json,
         save_graph_to_pickle,
