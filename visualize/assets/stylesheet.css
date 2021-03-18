@@ -1,0 +1,26 @@
+.output_parent {
+    display: flex;
+}
+
+.output_child {
+    flex: 1;
+}
+
+#inner_edges,
+#outer_edges {
+    padding: 0.5em;
+    margin: 0.5em;
+    border: 1px solid black;
+    width: 45%;
+}
+
+#select {
+    flex: 7;
+}
+#solutions-check {
+    flex: 3;
+}
+#graph-controls {
+    display: flex;
+    align-items: center;
+}
