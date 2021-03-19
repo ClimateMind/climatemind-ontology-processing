@@ -88,8 +88,8 @@ def compute_graphs(G):
         N = N.unflatten(f'-f -l6')
         # N.layout(prog='dot', args='-Gratio=compress -Gsize="30, 30" -Grankdir=BT -Gnodesep=0.01 -Nmargin="0.01,0.01"')
         N.layout(prog='dot')
-        N.draw(f"{value_key}.png", "png")
-        N.write(f"{value_key}.dot")
+        # N.draw(f"{value_key}.png", "png")
+        # N.write(f"{value_key}.dot")
 
         total_cyto_data = nx.readwrite.json_graph.cytoscape_data(subtree)['elements']
         cyto_nodes = total_cyto_data['nodes']
@@ -123,21 +123,21 @@ cyto_data_noslns, graph_data_noslns = compute_graphs(G_noslns)
 cyto_data_slns, graph_data_slns = compute_graphs(G_sln)
 app = dash.Dash(__name__)
 
+# Allows clientside JS code to reference node properties, like IRI, source, classes.
 node_storage = dcc.Store(
     id='node-storage',
-    storage_type='local',
-    data=dict(G_noslns.nodes(data=True))
+    storage_type='memory',
+    data=dict(G_sln.nodes(data=True))
 )
 
 # To be filled when in a callback
 edge_storage = dcc.Store(
     id='edge-storage',
-    storage_type='local'
+    storage_type='memory'
 )
 app.layout = html.Div([
     node_storage,
     edge_storage,
-
     html.Div(
         [
             dcc.Dropdown(
@@ -156,7 +156,7 @@ app.layout = html.Div([
     cyto.Cytoscape(
         id='cytoscape-two-nodes',
         layout={'name': 'preset'},
-        style={'height': '800px'},
+        style={'height': '600px'},
         elements=[],
         stylesheet=[
 
@@ -243,6 +243,7 @@ def change_viewed_key(new_key, view_slns):
         return cyto_data_noslns[new_key], edges_to_dict(graph_data_noslns[new_key])
 
 
+# Runs everytime a new node is moused-over. Updates the data textbox with node relationship.
 app.clientside_callback(
     dash.dependencies.ClientsideFunction(
         namespace='clientside',
@@ -250,16 +251,19 @@ app.clientside_callback(
     ),
     dash.dependencies.Output('dummy1', 'children'),
     dash.dependencies.Input('cytoscape-two-nodes', 'mouseoverNodeData'),
-    dash.dependencies.State('edge-storage', 'data')
+    [dash.dependencies.State('node-storage', 'data'),
+     dash.dependencies.State('edge-storage', 'data')]
 )
 
+# Runs on load to fill html.Div element output with custom HTMl tags
+# Not using Dash HTML library because much more complicated than writing plain HTML.
 app.clientside_callback(
     dash.dependencies.ClientsideFunction(
         namespace='clientside',
         function_name='fill_output_div'
     ),
     dash.dependencies.Output('dummy', 'children'),
-    dash.dependencies.Input('dummy', 'id')
+    dash.dependencies.Input('dummy1', 'id')
 )
 
 app.run_server(debug=True)
