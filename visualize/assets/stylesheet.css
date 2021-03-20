@@ -1,26 +1,40 @@
 .output_parent {
     display: flex;
+    height: 30%;
 }
 
 .output_child {
-    flex: 1;
+    flex: 0 0 21%;
+    padding: 0.3em;
+    margin: 0.05em;
+    border: 1px solid black;
 }
 
-#inner_edges,
-#outer_edges {
-    padding: 0.5em;
-    margin: 0.5em;
-    border: 1px solid black;
-    width: 45%;
-}
 
 #select {
     flex: 7;
 }
+
 #solutions-check {
     flex: 3;
 }
+
 #graph-controls {
     display: flex;
     align-items: center;
+}
+
+
+#cyto-graph-container {
+    height: 700px;
+    width: 70%;
+}
+
+#solutions-box {
+    background-color: hsl(120, 30%, 100%);
+}
+
+pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }

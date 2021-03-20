@@ -7,8 +7,17 @@ from ontology_processing.graph_creation.make_graph import make_acyclic
 from collections import deque
 import textwrap
 
+app = dash.Dash(__name__,
+                external_scripts=[{'src': 'assets/make_cyto_graph.mjs', 'type': 'module'}],
+                assets_ignore='.*\\.mjs')
+
 G1 = nx.read_gpickle('visualize/Climate_Mind_DiGraph.gpickle')
 G1 = make_acyclic(G1)
+
+# Copy risk solution to risk-solution. Spaces make some trouble in JS.
+for node in G1.nodes:
+    if 'risk solution' in G1.nodes[node]:
+        G1.nodes[node]['risk-solution'] = G1.nodes[node]['risk solution']
 
 
 def custom_bfs(graph, start_node):
@@ -68,9 +77,9 @@ def compute_graphs(G):
         for node in subtree.nodes:
             nx.set_node_attributes(subtree, {node: G.nodes[node]})
 
-            # Manual wrap text so graph is more condensed.
-            if len(subtree.nodes[node]['label']) > 20:
-                subtree.nodes[node]['label'] = textwrap.fill(subtree.nodes[node]['label'], 20)
+            subtree.nodes[node]['label'] = textwrap.fill(subtree.nodes[node]['label'], 20)
+            subtree.nodes[node]['cyto_width'] = '12em'
+            subtree.nodes[node]['cyto_height'] = "{}em".format(subtree.nodes[node]['label'].count('\n') + 1.4)
 
         graph_data[value_key] = subtree
 
@@ -86,8 +95,7 @@ def compute_graphs(G):
                 N.add_subgraph(connected_solutions, f"cluster_{node}")
         N.edge_attr.update(directed=True)
         N = N.unflatten(f'-f -l6')
-        # N.layout(prog='dot', args='-Gratio=compress -Gsize="30, 30" -Grankdir=BT -Gnodesep=0.01 -Nmargin="0.01,0.01"')
-        N.layout(prog='dot')
+        N.layout(prog='dot', args=' -Gsize="30, 30" -Grankdir=BT -Gnodesep=1.0')
         # N.draw(f"{value_key}.png", "png")
         # N.write(f"{value_key}.dot")
 
@@ -103,7 +111,6 @@ def compute_graphs(G):
         for node in cyto_nodes:
             graphviz_node = N.get_node(node['data']['id'])
             position = graphviz_node.attr.get('pos', []).split(',')
-            node['data'] = {**G.nodes[node['data']['id']], 'id': node['data']['id']}
             node['position'] = {'x': int(float(position[0])), 'y': int(float(position[1]))}
 
             if node['data']['id'] == value_key:
@@ -119,25 +126,39 @@ def compute_graphs(G):
     return cyto_data, graph_data
 
 
-cyto_data_noslns, graph_data_noslns = compute_graphs(G_noslns)
-cyto_data_slns, graph_data_slns = compute_graphs(G_sln)
-app = dash.Dash(__name__)
+def edges_to_dict(graph):
+    edge_storage_data = {}
+    for (e1, e2), edge_properties in dict(graph.out_edges).items():
+        if e1 not in edge_storage_data:
+            edge_storage_data[e1] = {}
+        edge_storage_data[e1][e2] = {**edge_properties, 'direction': 'forward'}
 
-# Allows clientside JS code to reference node properties, like IRI, source, classes.
-node_storage = dcc.Store(
-    id='node-storage',
-    storage_type='memory',
-    data=dict(G_sln.nodes(data=True))
-)
+    for (e1, e2), edge_properties in dict(graph.in_edges).items():
+        if e2 not in edge_storage_data:
+            edge_storage_data[e2] = {}
+        edge_storage_data[e2][e1] = {**edge_properties, 'direction': 'reverse'}
+    return edge_storage_data
+
+
+# Cyto_data_(no)slns: list of elements that cytoscape.js receives. Contains all info needed to render the graph.
+# graph_data_(no)sln: dict of nx.DiGraph keyed by personal value.
+# edge_data: adjacency dict. Created by edges_to_dict function.
+#       Access by edge_data[personal value string][edge1][edge2] = edge properties (also a dict)
+#       Contains all nodes, including solutions.
+# cyto_data_noslns, graph_data_noslns = compute_graphs(G_noslns)
+cyto_data_slns, graph_data_slns = compute_graphs(G_sln)
+# edge_data = {personal_value: edges_to_dict(graph) for personal_value, graph in graph_data_slns.items()}
+
 
 # To be filled when in a callback
-edge_storage = dcc.Store(
-    id='edge-storage',
-    storage_type='memory'
+# TODO: implement cyto storage for no solutions case
+cyto_storage = dcc.Store(
+    id='cyto-storage',
+    storage_type='memory',
+    data=cyto_data_slns
 )
 app.layout = html.Div([
-    node_storage,
-    edge_storage,
+    cyto_storage,
     html.Div(
         [
             dcc.Dropdown(
@@ -152,108 +173,12 @@ app.layout = html.Div([
                     {'label': 'See solutions', 'value': 'solution'}
                 ],
                 value=["solution"]
-            )], id="graph-controls"),
-    cyto.Cytoscape(
-        id='cytoscape-two-nodes',
-        layout={'name': 'preset'},
-        style={'height': '600px'},
-        elements=[],
-        stylesheet=[
-
-            {
-                'selector': "edge",
-                'style': {
-                    'width': 1,
-                    'line-color': '#ccc',
-                    'target-arrow-color': 'red',
-                    'target-arrow-shape': 'triangle',
-                    'curve-style': 'bezier',
-                    'arrow-scale': 2,
-                    'line-opacity': 0.9
-                }
-            }, {
-                'selector': 'node',
-                'style': {
-                    'label': 'data(label)',
-                    'text-wrap': 'wrap',
-                    'text-max-width': '12em',
-                    'text-halign': 'center',
-                    'text-valign': 'center',
-                    'width': 'label',
-                    'height': 'label',
-                    'font-size': 20,
-                    'shape': 'round-rectangle',
-                    'background-color': 'orange'
-                }
-            }, {
-                'selector': 'node',
-                'style': {
-                    'padding': '10px',
-                }
-            }, {
-                'selector': '.tree_root',
-                'style': {
-                    'background-color': 'blue'
-                }
-            }, {
-                'selector': '.risk-solution',
-                'style': {
-                    'background-color': 'green'
-                }
-            }, {
-                'selector': '.solution-edge',
-                'style': {
-                    'line-color': 'green',
-                    'line-opacity': 0.3
-                }
-            }
-        ]
-    ),
+            )]
+        , id="graph-controls"),
+    html.Div(id='cyto-graph-container'),
     html.Div(id='output', style={'whiteSpace': 'pre-wrap'}),
-    html.Div(id='dummy'), html.Div(id='dummy1')
+    html.Div(id='dummy1'), html.Div(id='dummy2'), html.Div(id='dummy3')
 ])
-
-
-@app.callback(
-    [dash.dependencies.Output('cytoscape-two-nodes', 'elements'), dash.dependencies.Output('edge-storage', 'data')],
-    [dash.dependencies.Input('select', 'value'), dash.dependencies.Input('solutions-check', 'value')]
-)
-def change_viewed_key(new_key, view_slns):
-    def edges_to_dict(graph):
-        edge_storage_data = {}
-        for (e1, e2), edge_properties in dict(graph.out_edges).items():
-            if e1 not in edge_storage_data:
-                edge_storage_data[e1] = {}
-            edge_storage_data[e1][e2] = {**edge_properties, 'direction': 'forward'}
-
-        for (e1, e2), edge_properties in dict(graph.in_edges).items():
-            if e2 not in edge_storage_data:
-                edge_storage_data[e2] = {}
-            edge_storage_data[e2][e1] = {**edge_properties, 'direction': 'reverse'}
-        return edge_storage_data
-
-    if new_key is None:
-        new_key = next(iter(cyto_data_slns))
-
-    print(f"changing to: {new_key}", view_slns)
-
-    if view_slns:
-        return cyto_data_slns[new_key], edges_to_dict(graph_data_slns[new_key])
-    else:
-        return cyto_data_noslns[new_key], edges_to_dict(graph_data_noslns[new_key])
-
-
-# Runs everytime a new node is moused-over. Updates the data textbox with node relationship.
-app.clientside_callback(
-    dash.dependencies.ClientsideFunction(
-        namespace='clientside',
-        function_name='mouse_over_func'
-    ),
-    dash.dependencies.Output('dummy1', 'children'),
-    dash.dependencies.Input('cytoscape-two-nodes', 'mouseoverNodeData'),
-    [dash.dependencies.State('node-storage', 'data'),
-     dash.dependencies.State('edge-storage', 'data')]
-)
 
 # Runs on load to fill html.Div element output with custom HTMl tags
 # Not using Dash HTML library because much more complicated than writing plain HTML.
@@ -262,8 +187,38 @@ app.clientside_callback(
         namespace='clientside',
         function_name='fill_output_div'
     ),
-    dash.dependencies.Output('dummy', 'children'),
-    dash.dependencies.Input('dummy1', 'id')
+    dash.dependencies.Output('dummy2', 'children'),
+    dash.dependencies.Input('dummy1', 'children')
+)
+
+# # User has selected a new personal value.
+# # Updates clientside browser storage with new information about the new personal value.
+# @app.callback(
+#     [dash.dependencies.Output('cyto-storage', 'data'), dash.dependencies.Output('edge-storage', 'data')],
+#     [dash.dependencies.Input('select', 'value'), dash.dependencies.Input('solutions-check', 'value')]
+# )
+# def change_viewed_key(new_key, view_slns):
+#     # Dash calls all callbacks upon first load with None arguments.
+#     if new_key is None:
+#         new_key = next(iter(cyto_data_slns))
+#
+#     print(f"changing to: {new_key}", view_slns)
+#
+#     if view_slns:
+#         updated_cyto_data = cyto_data_slns[new_key]
+#     else:
+#         updated_cyto_data = cyto_data_slns[new_key]
+#
+#     return updated_cyto_data, edge_data[new_key]
+
+
+app.clientside_callback(
+    dash.dependencies.ClientsideFunction(
+        namespace='clientside',
+        function_name='update_storage_globals'
+    ),
+    dash.dependencies.Output('dummy1', 'children'),
+    [dash.dependencies.Input('cyto-storage', 'data')],
 )
 
 app.run_server(debug=True)
