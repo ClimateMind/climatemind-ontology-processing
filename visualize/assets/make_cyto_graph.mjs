@@ -46,7 +46,7 @@ export function make_cyto(personal_value, storage_index = 0) {
                     'font-size': 20,
                     'shape': 'round-rectangle',
                     'background-color': 'hsl(27,55%,64%)',
-                    'padding': '15px 0px 15px 0px'
+                    'padding': '15px 3px 15px 3px'
                 }
             }, {
                 selector: '.tree_root',
@@ -66,14 +66,12 @@ export function make_cyto(personal_value, storage_index = 0) {
             }, {
                 selector: '.is-highlighted',
                 style: {
-                    'font-weight': 'bold',
-                    'color': 'black',
-                    'font-style': 'italic'
+                    'background-blacken': 0.15
                 }
             }, {
                 selector: ".filter-view-one",
                 style: {
-                    'background-blacken': "0.3"
+                    'background-blacken': 0.25
                 }
             }],
         layout: {
@@ -95,12 +93,13 @@ export function make_cyto(personal_value, storage_index = 0) {
 }
 
 function register_cy_callbacks(cy) {
-    cy.listen('mouseover', 'edge', function (evt) {
+    cy.listen('click', 'edge', function (evt) {
         document.getElementById('object_output').textContent = JSON.stringify(evt.target.data(), undefined, 2)
     })
 
     cy.listen('click', 'node', function (evt) {
-        window.open(`https://webprotege.stanford.edu/#projects/de9e0a93-66a8-40c6-bce8-b972847d362f/edit/Individuals?selection=NamedIndividual(%3Chttp://webprotege.stanford.edu/${evt.target.data('iri')}%3E)`)
+        document.getElementById('object_output').textContent = JSON.stringify(evt.target.data(), undefined, 2)
+        document.getElementById('object_output').setAttribute("web_protege_iri", evt.target.data('iri'))
     })
     cy.listen('mouseover', 'node', function (evt) {
         const mouseover_node_data = evt.target.data();
@@ -129,7 +128,7 @@ function register_cy_callbacks(cy) {
         document.getElementById('outer_edges_output').innerHTML = outer_edges.join('.\n\n')
         document.getElementById('inner_edges_output').innerHTML = inner_edges.join('.\n\n')
         document.getElementById('solutions_output').innerHTML = solutions.join('.\n\n')
-        document.getElementById('object_output').textContent = JSON.stringify(evt.target.data(), undefined, 2)
+
 
         // Add is_highlighted attribute to all nodes
         evt.target.closedNeighbourhood().addClass('is-highlighted')
@@ -140,15 +139,24 @@ function register_cy_callbacks(cy) {
     })
 
     document.addEventListener('keydown', function (key) {
-        if (key.code == "KeyS" && key.shiftKey) {
+        if (key.code == "KeyS" && key.altKey) {
+            const filter_text = document.getElementById('filter-code').value
+            document.getElementById("errors-output").textContent = 'Processing ' + filter_text + '\n'
+
+            cy.nodes('.filter-view-one').removeClass('filter-view-one')
+
             cy.nodes().forEach(function (ele, _unused, _unused1) {
-                if (Object.values(ele.data('properties')).some((source) => source.length > 0)) {
-                    ele.removeClass('filter-view-one')
+                key.preventDefault()
+                const node = ele.data()
+
+                let filter_passes = false
+                try {
+                    filter_passes = eval(filter_text)
+                } catch (err) {
+                    document.getElementById("errors-output").textContent += err + ' ' + filter_passes + '\n';
                 }
-            })
-        } else if (key.code == "KeyS") {
-            cy.nodes().forEach(function (ele, _unused, _unused1) {
-                if (Object.values(ele.data('properties')).some((source) => source.length > 0)) {
+                document.getElementById("errors-output").textContent += filter_passes + '\n'
+                if (filter_passes) {
                     ele.addClass('filter-view-one')
                 }
             })

@@ -7,7 +7,7 @@ if (!window.dash_clientside) {
 }
 window.dash_clientside = Object.assign({}, window.dash_clientside, {
     clientside: {
-        update_storage_globals: function ( _cyto_storage) {
+        update_storage_globals: function (_cyto_storage) {
             cyto_storage = _cyto_storage;
             make_cyto("increase in physical violence")
         },
@@ -29,9 +29,21 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
 <p id="solutions_output">Mouse over any node to get its relationships</p>\
 </div>\
 <div id='data_box' class = "output_child">\
-<pre id ="object_output"></pre>\
+<pre id ="object_output" title="Double click to go to WebProtege">Click on any node to view its JSON properties</pre>\
+</div>
+
+<div class = "output_child" id="filter-div">
+<textarea type="text" id="filter-code"></textarea>
+<pre id="errors-output">Enter any code that evaluates to a truthy value or falsey value to filter. The "node" object allows you to access node properties. Any error evaluates to false.
+Example: node["properties"]["dc_source"]
+Example: node["direct classes"].includes("adaptation")
+</pre>
 </div>
 `
+
+            document.getElementById('object_output').addEventListener('dblclick', (event) => {
+                window.open(`https://webprotege.stanford.edu/#projects/de9e0a93-66a8-40c6-bce8-b972847d362f/edit/Individuals?selection=NamedIndividual(%3Chttp://webprotege.stanford.edu/${event.target.getAttribute("web_protege_iri")}%3E)`)
+            })
         }
     }
 });

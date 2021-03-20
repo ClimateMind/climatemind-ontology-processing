@@ -1,15 +1,44 @@
 .output_parent {
     display: flex;
-    height: 30%;
+    height: 350px;
 }
 
 .output_child {
-    flex: 0 0 21%;
-    padding: 0.3em;
+    flex: 0 0 20%;
     margin: 0.05em;
     border: 1px solid black;
+    overflow:scroll;
+    min-height:100%;
+    font-size: 12px;
 }
 
+#data_box {
+    flex: 0 0 40%;
+}
+
+
+#filter-div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 5px;
+    font-size: 11px;
+}
+#filter-div > * {
+    width: 100%;
+    max-height: 30%;
+}
+#errors-output {
+    max-height: 70%;
+    word-break:break-all;
+}
+
+#outer_edges,
+#inner_edges,
+#solutions_box {
+    flex: 0 0 10%;
+    font-size: 14px;
+}
 
 #select {
     flex: 7;
@@ -26,8 +55,8 @@
 
 
 #cyto-graph-container {
-    height: 700px;
-    width: 70%;
+    height: 600px;
+    width: 100%;
 }
 
 #solutions-box {
@@ -38,3 +67,4 @@ pre {
     white-space: pre-wrap;
     word-wrap: break-word;
 }
+
