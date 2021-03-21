@@ -32,7 +32,6 @@ except ImportError:
 
 import os
 
-
 # Set a lower JVM memory limit
 owlready2.reasoning.JAVA_MEMORY = 500
 
@@ -279,13 +278,13 @@ def set_edge_properties(G):
         edge_attributes_dict = {}
 
         if (
-            G[node_a][node_b]["type"]
-            != "is_inhibited_or_prevented_or_blocked_or_slowed_by"
+                G[node_a][node_b]["type"]
+                != "is_inhibited_or_prevented_or_blocked_or_slowed_by"
         ):
 
             for prop in G.nodes[node_a]["properties"].keys():
                 if (
-                    prop in source_types
+                        prop in source_types
                 ):  # ensures only the source_types above are considered
                     node_a_prop_sources = set(G.nodes[node_a]["properties"][prop])
                     node_b_prop_sources = set(G.nodes[node_b]["properties"][prop])
@@ -297,14 +296,14 @@ def set_edge_properties(G):
 
                         if (node_a, prop) in to_remove.keys():
                             to_remove[(node_a, prop)] = (
-                                to_remove[(node_a, prop)] | intersection
+                                    to_remove[(node_a, prop)] | intersection
                             )
                         else:
                             to_remove[(node_a, prop)] = intersection
 
                         if (node_b, prop) in to_remove.keys():
                             to_remove[(node_b, prop)] = (
-                                to_remove[(node_b, prop)] | intersection
+                                    to_remove[(node_b, prop)] | intersection
                             )
                         else:
                             to_remove[(node_b, prop)] = intersection
@@ -366,14 +365,14 @@ def make_acyclic(G):
         node_neighbors = B.neighbors(node)
         for neighbor in node_neighbors:
             if (
-                "increase in atmospheric greenhouse gas"
-                in graph_attributes_dictionary[neighbor]
-                or "root cause linked to humans"
-                in graph_attributes_dictionary[neighbor]
+                    "increase in atmospheric greenhouse gas"
+                    in graph_attributes_dictionary[neighbor]
+                    or "root cause linked to humans"
+                    in graph_attributes_dictionary[neighbor]
             ):
                 # should make this 'increase in atmospheric greenhouse gas' not hard coded!
                 if (
-                    B[node][neighbor]["type"] == "causes_or_promotes"
+                        B[node][neighbor]["type"] == "causes_or_promotes"
                 ):  # should probably make this so the causes_or_promotes isn't hard coded!
                     feedbackloop_edges.append((node, neighbor))
 
@@ -430,7 +429,7 @@ def local_graph(node, graph, visited_dictionary):
         return graph.nodes[node]["isPossiblyLocal"]
     else:
         if "isPossiblyLocal" in graph.nodes[node] and isinstance(
-            graph.nodes[node]["isPossiblyLocal"], int
+                graph.nodes[node]["isPossiblyLocal"], int
         ):
             [
                 local_graph(parent, graph, visited_dictionary)
@@ -450,7 +449,7 @@ def local_graph(node, graph, visited_dictionary):
             return graph.nodes[node]["isPossiblyLocal"]
 
 
-def makeGraph(onto_path, edge_path, output_folder_path):
+def makeGraph(onto_path, edge_path, output_folder_path=''):
     """
     Main function to make networkx graph object from reference ontology and edge list.
 
@@ -512,8 +511,8 @@ def makeGraph(onto_path, edge_path, output_folder_path):
     for node in B.nodes:
         if not list(B.neighbors(node)):
             if (
-                "test ontology" in B.nodes[node]
-                and B.nodes[node]["test ontology"][0] == "test ontology"
+                    "test ontology" in B.nodes[node]
+                    and B.nodes[node]["test ontology"][0] == "test ontology"
             ):
                 if "risk solution" in B.nodes[node]:
                     if "risk solution" not in B.nodes[node]["risk solution"]:
@@ -528,8 +527,8 @@ def makeGraph(onto_path, edge_path, output_folder_path):
                     has_no_child = False
             if has_no_child:
                 if (
-                    "test ontology" in B.nodes[node]
-                    and B.nodes[node]["test ontology"][0] == "test ontology"
+                        "test ontology" in B.nodes[node]
+                        and B.nodes[node]["test ontology"][0] == "test ontology"
                 ):
                     if "risk solution" in B.nodes[node]:
                         if "risk solution" not in B.nodes[node]["risk solution"]:
@@ -540,6 +539,31 @@ def makeGraph(onto_path, edge_path, output_folder_path):
     acyclic_graph = B.copy()
     visited_dict = {}
     test_value = local_graph(starting_nodes[1], acyclic_graph, visited_dict)
+
+    # Returns the subgraph achieved by BFS on start_node
+    def custom_bfs(graph, start_node, direction="forward", edge_type="causes_or_promotes"):
+        queue = [start_node]
+        cur_index = 0
+        new_graph = nx.DiGraph()
+
+        def do_bfs(element):
+            nonlocal cur_index
+            if direction == "reverse":
+                for start, end, data in graph.in_edges(element, data=True):
+                    if edge_type == "any" or data["type"] == edge_type:
+                        queue.append(start)
+            elif direction == "forward":
+                for start, end, data in graph.out_edges(element, data=True):
+                    if edge_type == "any" or data["type"] == edge_type:
+                        queue.append(end)
+
+        do_bfs(start_node)
+
+        while cur_index < len(queue):
+            do_bfs(queue[cur_index])
+            cur_index = cur_index + 1
+
+        return graph.subgraph(queue)
 
     # feedback loop edges should be severed in the graph copy B
     edges_upstream_greenhouse_effect = nx.edge_dfs(
@@ -559,6 +583,11 @@ def makeGraph(onto_path, edge_path, output_folder_path):
         OrderedDict.fromkeys(nodes_upstream_greenhouse_effect)
     )  # this shouldn't include myths!
 
+    assert (sorted(nodes_upstream_greenhouse_effect) == sorted(
+        list(custom_bfs(B, "increase in greenhouse effect", "reverse").nodes())))
+    subgraph_upstream = custom_bfs(B, "increase in greenhouse effect", "reverse")
+    nodes_upstream_greenhouse_effect = subgraph_upstream.nodes()
+
     # now get all the nodes that have the inhibit relationship with the nodes found in nodes_upstream_greenhouse_effect (these nodes should all be the mitigation solutions)
     mitigation_solutions = list()
 
@@ -566,12 +595,13 @@ def makeGraph(onto_path, edge_path, output_folder_path):
         node_neighbors = B.neighbors(node)
         for neighbor in node_neighbors:
             if (
-                B[node][neighbor]["type"]
-                == "is_inhibited_or_prevented_or_blocked_or_slowed_by"
+                    B[node][neighbor]["type"]
+                    == "is_inhibited_or_prevented_or_blocked_or_slowed_by"
             ):  # bad to hard code in 'is_inhibited_or_prevented_or_blocked_or_slowed_by'
                 mitigation_solutions.append(neighbor)
 
     mitigation_solutions = list(set(mitigation_solutions))
+    subgraph_mitigation = B.subgraph(mitigation_solutions)
 
     # sort the mitigation solutions from highest to lowest CO2 Equivalent Reduced / Sequestered (2020–2050)
     # in Gigatons from Project Drawdown scenario 2
@@ -581,8 +611,8 @@ def makeGraph(onto_path, edge_path, output_folder_path):
 
     for solution in mitigation_solutions:
         if (
-            solution not in mitigation_solutions_with_co2
-            and G.nodes[solution]["data_properties"]["CO2_eq_reduced"]
+                solution not in mitigation_solutions_with_co2
+                and G.nodes[solution]["data_properties"]["CO2_eq_reduced"]
         ):
             mitigation_solutions_with_co2[solution] = G.nodes[solution][
                 "data_properties"
@@ -631,6 +661,11 @@ def makeGraph(onto_path, edge_path, output_folder_path):
     downstream_nodes = nx.dfs_edges(B, "increase in greenhouse effect")
     downstream_nodes = [item for sublist in downstream_nodes for item in sublist]
     nodes_downstream_greenhouse_effect = list(OrderedDict.fromkeys(downstream_nodes))
+
+    subgraph_downstream = custom_bfs(B, "increase in greenhouse effect", edge_type="any")
+    assert (sorted(nodes_downstream_greenhouse_effect) == sorted(list(subgraph_downstream.nodes())))
+
+    total_adaptation_nodes = []
     for effectNode in nodes_downstream_greenhouse_effect:
         intermediate_nodes = nx.all_simple_paths(
             B, "increase in greenhouse effect", effectNode
@@ -647,8 +682,8 @@ def makeGraph(onto_path, edge_path, output_folder_path):
             node_neighbors = G.neighbors(intermediateNode)
             for neighbor in node_neighbors:
                 if (
-                    G[intermediateNode][neighbor]["type"]
-                    == "is_inhibited_or_prevented_or_blocked_or_slowed_by"
+                        G[intermediateNode][neighbor]["type"]
+                        == "is_inhibited_or_prevented_or_blocked_or_slowed_by"
                 ):  # bad to hard code in 'is_inhibited_or_prevented_or_blocked_or_slowed_by'
                     node_adaptation_solutions.append(neighbor)
                 # if (
@@ -669,6 +704,8 @@ def makeGraph(onto_path, edge_path, output_folder_path):
             G, {effectNode: node_adaptation_solutions}, "adaptation solutions"
         )
 
+        total_adaptation_nodes.extend(node_adaptation_solutions)
+
         # add solution sources field to all adaptation solution nodes
         for solution in node_adaptation_solutions:
             sources = solution_sources(G.nodes[solution], source_types)
@@ -677,6 +714,30 @@ def makeGraph(onto_path, edge_path, output_folder_path):
                 {solution: sources},
                 "solution sources",
             )
+
+    subgraph_adaptations = B.subgraph(total_adaptation_nodes)
+
+    # Currently ignoring nodes that are not upstream nor downstream of "increase in greenhouse effect" like "increase in river flooding"
+    set_adaptations = set(subgraph_adaptations.nodes())
+    set_mitigation = set(subgraph_mitigation.nodes())
+    set_upstream = set(subgraph_upstream.nodes())
+    set_downstream = set(subgraph_downstream.nodes())
+
+    total_set = set_downstream.union(set_upstream, set_adaptations, set_mitigation)
+    assert (set_upstream.intersection(set_downstream).pop() == "increase in greenhouse effect")
+
+    subgraph_upstream_mitigations = B.subgraph(set_upstream.union(set_mitigation))
+    N = nx.nx_agraph.to_agraph(subgraph_upstream_mitigations)
+    N.draw(f"upstream_mitigations.png", "png", prog="dot")
+
+    subgraph_downstream_adaptations = B.subgraph(set_downstream.union(set_adaptations))
+    N = nx.nx_agraph.to_agraph(subgraph_downstream_adaptations)
+    N.draw(f"downstream_adaptations.png", "png", prog="dot")
+
+    for node in B.nodes():
+        if node not in total_set and node not in all_myths:
+            # Check nodes that are ignored (neither upstream of greenhouse nor downstream of greenhouse.
+            print(node, "ignored")
 
     # process myths in networkx object to be easier for API
     general_myths = list()
@@ -710,8 +771,8 @@ def makeGraph(onto_path, edge_path, output_folder_path):
         myth_sources = list()
         for source_type in source_types:
             if (
-                "properties" in G.nodes[myth]
-                and source_type in G.nodes[myth]["properties"]
+                    "properties" in G.nodes[myth]
+                    and source_type in G.nodes[myth]["properties"]
             ):
                 myth_sources.extend(G.nodes[myth]["properties"][source_type])
 
