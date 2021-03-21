@@ -7,6 +7,9 @@ if (!window.dash_clientside) {
 }
 window.dash_clientside = Object.assign({}, window.dash_clientside, {
     clientside: {
+        update_personal_value : function(personal_value) {
+            make_cyto(personal_value)
+        },
         update_storage_globals: function (_cyto_storage) {
             cyto_storage = _cyto_storage;
             make_cyto("increase in physical violence")
