@@ -1,6 +1,6 @@
 import cytoscape from 'https://unpkg.com/cytoscape@3.18.1/dist/cytoscape.esm.min.js'
 
-var cy;
+var cy, dijkstra;
 
 
 function save_func(personal_value, storage_index = 1) {
@@ -13,71 +13,96 @@ export function make_cyto(personal_value, storage_index = 0) {
     if (cy) {
         cy.destroy()
     }
-
-
     console.log("Making new graph")
     cy = cytoscape({
-        container: document.getElementById('cyto-graph-container'), // container to render in
-        // Moving nodes around will actually change data in cyto_storage.
-        // Cytoscape owns all objects given to it. Maybe we should create a deep copy?
-        elements: cyto_storage[personal_value],
-        style: [ // the stylesheet for the graph
-            {
-                selector: "edge",
-                style: {
-                    'width': 1,
-                    'line-color': 'black',
-                    'target-arrow-color': 'red',
-                    'target-arrow-shape': 'triangle',
-                    'curve-style': 'bezier',
-                    'arrow-scale': 2
-                }
-            }, {
-                selector: 'node',
-                style: {
-                    'label': 'data(label)',
-                    'text-wrap': 'wrap',
-                    // 'text-max-width': '12em', //TODO: check whether this is necessary?
-                    'color': 'hsla(215,0%,19%,1)',
-                    'text-halign': 'center',
-                    'text-valign': 'center',
-                    'width': 'data(cyto_width)',
-                    'height': 'data(cyto_height)',
-                    'font-size': 20,
-                    'shape': 'round-rectangle',
-                    'background-color': 'hsl(27,55%,64%)',
-                    'padding': '15px 3px 15px 3px'
-                }
-            }, {
-                selector: '.tree_root',
-                style: {
-                    'background-color': 'hsla(215, 64%, 67%, 1)'
-                }
-            }, {
-                selector: '.risk-solution',
-                style: {
-                    'background-color': 'hsla(73, 64%, 67%, 1)'
-                }
-            }, {
-                selector: '.solution-edge',
-                style: {
-                    'line-color': 'green'
-                }
-            }, {
-                selector: '.is-highlighted',
-                style: {
-                    'background-blacken': 0.15
-                }
-            }, {
-                selector: ".filter-view-one",
-                style: {
-                    'background-blacken': 0.25
-                }
-            }],
-        layout: {
-            name: 'preset'
+            container: document.getElementById('cyto-graph-container'), // container to render in
+            // Moving nodes around will actually change data in cyto_storage.
+            // Cytoscape owns all objects given to it. Maybe we should create a deep copy?
+            elements: cyto_storage[personal_value],
+            style: [ // the stylesheet for the graph
+                {
+                    selector: "edge",
+                    style: {
+                        'width': 2,
+                        'line-color': 'hsl(1, 0%, 60%)',
+                        'target-arrow-shape': 'triangle',
+                        "target-arrow-color": "hsl(1, 0%, 60%)",
+                        'curve-style': 'bezier',
+                        'arrow-scale': 2
+                    }
+                }, {
+                    selector: 'node',
+                    style: {
+                        'label': 'data(label)',
+                        'text-wrap': 'wrap',
+                        // 'text-max-width': '12em', //TODO: check whether this is necessary?
+                        'text-halign': 'center',
+                        'text-valign': 'center',
+                        'width': 'data(cyto_width)',
+                        'height': 'data(cyto_height)',
+                        'font-size': 24,
+                        'font-family': 'Segoe UI',
+                        'shape': 'round-rectangle',
+                        'background-color': 'hsl(25,60%,81%)',
+                        'border-width': '2px',
+                        'border-color': 'hsl(18,33%,32%)'
+                    }
+                }, {
+                    selector: '.tree_root',
+                    style: {
+                        'background-color': 'hsl(213,65%,82%)'
+                    }
+                }, {
+                    selector: '.risk-solution',
+                    style: {
+                        'background-color': 'hsl(77,52%,79%)'
+                    }
+                }, {
+                    selector: '.solution-edge',
+                    style: {
+                        "target-arrow-shape": 'none',
+                        "source-arrow-shape": "tee"
+                    }
+                }, {
+                    selector: '.is-highlighted',
+                    style: {
+                        'background-blacken': 0.15
+                    }
+                }, {
+                    selector: "node.filter-view-one",
+                    style: {
+                        'background-blacken': 0.1
+                    }
+                }, {
+                    selector: "edge.filter-view-one",
+                    style: {
+                        'width': 4,
+                        'line-color': 'black',
+                        "target-arrow-color": "black"
+                    }
+                }, {
+                    selector: '.filter-view-two',
+                    style: {
+                        'border-width': '5px',
+                        'border-color': 'hsl(31,92%,23%)',
+                        'background-color': "hsl(154,9%,69%)"
+                    }
+                }, {
+                    selector: '.problem-view',
+                    style: {
+                        'background-blacken': 0.2,
+                        'border-width': '10px',
+                        'border-color': 'hsl(0,86%,25%)',
+                        'line-color': 'red'
+                    }
+                }],
+            layout: {
+                name: 'preset'
+            },
+            wheelSensitivity: 0.15
         }
-    });
+    )
+    ;
 
     let local_storage_key = `cytoscape_graph_cache_${personal_value}_${storage_index}`
     if (localStorage.getItem(local_storage_key) && storage_index) {
@@ -87,10 +112,59 @@ export function make_cyto(personal_value, storage_index = 0) {
     }
     register_cy_callbacks(cy)
 
-    // For console debugging only.
+// For console debugging only.
     window.cy = cy;
 
+    dash_clientside.clientside.update_filter("__use_old")
+    dijkstra = cy.elements().dijkstra(cy.getElementById("increase in greenhouse effect"), () => {
+        return 1
+    }, true)
 }
+
+var filter_exported = {
+    apply_no_long_descs: function () {
+        cy.$('.problem-view').removeClass('problem-view')
+        cy.nodes('node[properties].personal-value,.risk-solution').forEach(function (node) {
+            if (node.data('properties')['schema_longDescription'].length == 0) {
+                node.addClass('problem-view')
+            }
+        })
+    },
+    apply_no_sources: function () {
+        cy.$('.problem-view').removeClass('problem-view')
+        cy.nodes('node[properties].personal-value, .risk-solution').forEach(function (node) {
+            const node_props = node.data('properties')
+            if (!(node_props['dc_source'].length ||
+                node_props['schema_academicBook'].length ||
+                node_props['schema_academicSourceNoPaywall'].length ||
+                node_props['schema_academicSourceWithPaywall'].length ||
+                node_props['schema_governmentSource'].length ||
+                node_props['schema_mediaSource'].length ||
+                node_props['schema_mediaSourceForConservatives'].length ||
+                node_props['schema_organizationSource'].length)) {
+                node.addClass('problem-view')
+            }
+        })
+
+        cy.edges('.edge-no-source').addClass('problem-view')
+    },
+    apply_personal_values: function () {
+        cy.$('.problem-view').removeClass('problem-view')
+        cy.nodes('.personal-value').addClass('problem-view')
+    },
+    apply_none: function () {
+        cy.$('.problem-view').removeClass('problem-view')
+
+    },
+
+    search_node(search_term) {
+        cy.$('.filter-view-two').removeClass('filter-view-two')
+        cy.getElementById(search_term).flashClass("filter-view-two", 1000)
+    }
+}
+
+window.filter_exported = filter_exported
+
 
 function register_cy_callbacks(cy) {
     cy.listen('click', 'edge', function (evt) {
@@ -102,40 +176,37 @@ function register_cy_callbacks(cy) {
         document.getElementById('object_output').setAttribute("web_protege_iri", evt.target.data('iri'))
     })
     cy.listen('mouseover', 'node', function (evt) {
+        cy.$('.filter-view-one').removeClass('filter-view-one')
+
         const mouseover_node_data = evt.target.data();
         const outer_edges = []
         const inner_edges = []
-        const solutions = []
 
 
         evt.target.outgoers('edge').forEach(function (ele, _unused, _unused1) {
-            if (ele.classes().includes("solution-edge")) {
-                solutions.push(ele.data("target"))
-            } else {
-                outer_edges.push(ele.data("target"))
-            }
+            outer_edges.push(ele.data("target"))
         })
 
         evt.target.incomers('edge').forEach(function (ele, _unused, _unused1) {
-            if (ele.classes().includes("solution-edge")) {
-                solutions.push(ele.data("source"))
-            } else {
-                inner_edges.push(ele.data("source"))
-            }
+            inner_edges.push(ele.data("source"))
         })
 
 
         document.getElementById('outer_edges_output').innerHTML = outer_edges.join('.\n\n')
         document.getElementById('inner_edges_output').innerHTML = inner_edges.join('.\n\n')
-        document.getElementById('solutions_output').innerHTML = solutions.join('.\n\n')
+        document.getElementById('node_name_output').innerHTML = evt.target.id()
 
 
         // Add is_highlighted attribute to all nodes
-        evt.target.closedNeighbourhood().addClass('is-highlighted')
+        // evt.target.closedNeighbourhood().addClass('is-highlighted')
+
+        dijkstra.pathTo(evt.target).addClass("filter-view-one")
     })
     cy.listen('mouseout', 'node', function (evt) {
         // Remove is-higlighted attribute to all nodes
-        evt.target.closedNeighbourhood().removeClass("is-highlighted")
+        // evt.target.closedNeighbourhood().removeClass("is-highlighted")
+        dijkstra.pathTo(evt.target).removeClass("filter-view-one")
+
     })
 
     document.addEventListener('keydown', function (key) {
@@ -176,6 +247,5 @@ document.addEventListener('keydown', function (key) {
         localStorage.clear() // Clear local storage
         console.log("Cleared local storage")
     }
-
 })
 window.make_cyto = make_cyto;

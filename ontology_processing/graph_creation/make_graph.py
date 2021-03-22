@@ -1,4 +1,3 @@
-import json
 import pickle
 import textwrap
 import argparse
@@ -7,7 +6,7 @@ import pandas as pd
 import validators
 
 import owlready2
-from owlready2 import get_ontology, sync_reasoner
+from owlready2 import sync_reasoner
 from collections import OrderedDict
 
 try:
@@ -31,7 +30,6 @@ except ImportError:
         get_test_ontology,
     )
 
-import os
 
 # Set a lower JVM memory limit
 owlready2.reasoning.JAVA_MEMORY = 500
@@ -585,14 +583,13 @@ def makeGraph(onto_path, edge_path, output_folder_path='.'):
         OrderedDict.fromkeys(nodes_upstream_greenhouse_effect)
     )  # this shouldn't include myths!
 
-    assert (sorted(nodes_upstream_greenhouse_effect) == sorted(
-        list(custom_bfs(B, "increase in greenhouse effect", "reverse").nodes())))
+    # Does the same thing. Assert to check correctness
     subgraph_upstream = custom_bfs(B, "increase in greenhouse effect", "reverse").copy()
-    nodes_upstream_greenhouse_effect = subgraph_upstream.nodes()
+    assert (sorted(nodes_upstream_greenhouse_effect) == sorted(subgraph_upstream.nodes()))
 
     # now get all the nodes that have the inhibit relationship with the nodes found in nodes_upstream_greenhouse_effect (these nodes should all be the mitigation solutions)
     mitigation_solutions = list()
-    mitigation_solutions1 = list()
+    mitigation_solutions1 = list()  # Perhaps a better way to implement this? See below. assertion passes means they're the same code.
 
     for node in nodes_upstream_greenhouse_effect:
         node_neighbors = B.neighbors(node)
@@ -727,18 +724,10 @@ def makeGraph(onto_path, edge_path, output_folder_path='.'):
 
     subgraph_adaptations = B.subgraph(total_adaptation_nodes).copy()
 
-    def draw_graph(name, G):
-        N = nx.nx_agraph.to_agraph(G)
-        N.edge_attr.update(directed=True)
-        N = N.unflatten(f'-f -l15')
-        N.layout(prog='dot', args='-Gratio=compress -Grankdir=TB')
-        N.draw(f"pictures/{name}.png", "png")
 
-        # When exporting to JS somehow renders it vertically flipped. So we flip it back.
-        N.layout(prog='dot', args='-Gratio=compress -Gsize="20, 40" -Grankdir=BT')
 
-        return N
-
+    # Joins subgraphs into a bigger subgraph
+    # We can't use nx.union because it doesn't add edges connecting two subgraphs together
     def union_subgraph(subgraph, *args):
         G_node_set = set(subgraph.nodes())
         for other_subg in args:
@@ -751,60 +740,22 @@ def makeGraph(onto_path, edge_path, output_folder_path='.'):
     total_viz_graphs = union_subgraph(subgraph_upstream, subgraph_mitigation, subgraph_adaptations,
                                       subgraph_downstream)
     # Copy B so we can set colors without modifying original graph.
-    B_copy = B.copy()
+    B_graphviz_copy = B.copy()
     # See the nodes and their types that we export for visualization.
-    for node in B_copy.nodes():
+    for node in B_graphviz_copy.nodes():
         if subgraph_upstream.has_node(node):
-            B_copy.nodes[node]['color'] = 'green'
+            B_graphviz_copy.nodes[node]['color'] = 'green'
         elif subgraph_downstream.has_node(node):
-            B_copy.nodes[node]['color'] = 'grey'
+            B_graphviz_copy.nodes[node]['color'] = 'grey'
         elif subgraph_mitigation.has_node(node):
-            B_copy.nodes[node]['color'] = 'blue'
+            B_graphviz_copy.nodes[node]['color'] = 'blue'
         elif subgraph_adaptations.has_node(node):
-            B_copy.nodes[node]['color'] = 'purple'
+            B_graphviz_copy.nodes[node]['color'] = 'purple'
         elif node not in all_myths:
             # Check nodes that are ignored (neither upstream of greenhouse nor downstream of greenhouse effect).
             print(node, "ignored")
-            node_data = B_copy.nodes[node]
-            B_copy.nodes[node]['color'] = 'red'
-
-    # Lets us see which node's considered upstream, downstream, adaptation, mitigation, or ignored.
-    draw_graph("all_nodes", B_copy)
-
-    draw_graph("upstream", subgraph_upstream)
-    draw_graph("downstream", subgraph_downstream)
-    draw_graph("upstream_mitigations", subgraph_upstream_mitigations)
-    draw_graph("downstream_adaptations", subgraph_downstream_adaptations)
-
-    def convert_graph_to_cyto(G, tree_root):
-        for node in G.nodes:
-            nx.set_node_attributes(G, {node: G.nodes[node]})
-            G.nodes[node]['label'] = textwrap.fill(G.nodes[node]['label'], 20)
-            G.nodes[node]['cyto_width'] = '11em'
-            G.nodes[node]['cyto_height'] = "{}em".format(G.nodes[node]['label'].count('\n') + 1)
-
-        total_cyto_data = nx.readwrite.json_graph.cytoscape_data(G)['elements']
-        cyto_nodes = total_cyto_data['nodes']
-        cyto_edges = total_cyto_data['edges']
-
-        N = draw_graph(tree_root, G)
-        for edge in cyto_edges:
-            if 'risk solution' in G.nodes[edge['data']['source']] or 'risk solution' in G.nodes[
-                edge['data']['target']]:
-                edge['classes'] = 'solution-edge'
-
-        # Extract x y positions using graphviz dot algo. Use x,y positions to make cytoscape graph
-        for node in cyto_nodes:
-            graphviz_node = N.get_node(node['data']['id'])
-            position = graphviz_node.attr.get('pos', []).split(',')
-            node['position'] = {'x': int(float(position[0])), 'y': int(float(position[1]))}
-
-            if node['data']['id'] == tree_root:
-                node['classes'] = 'tree_root'
-
-            if 'risk solution' in node['data']:
-                node['classes'] = 'risk-solution'
-        return list(cyto_nodes) + list(cyto_edges)
+            node_data = B_graphviz_copy.nodes[node]
+            B_graphviz_copy.nodes[node]['color'] = 'red'
 
     # Computes an array of elements + nodes to input into cytoscape.js for each personal value
     # Computes the subgraphs achieved by BFS through each of those personal values
@@ -832,18 +783,11 @@ def makeGraph(onto_path, edge_path, output_folder_path='.'):
             subtree = custom_bfs(G, value_key, direction="reverse", edge_type="any")
 
             graph_data[value_key] = subtree.copy()
-            cyto_data[value_key] = convert_graph_to_cyto(subtree, value_key)
-        return cyto_data, graph_data
+        return graph_data
 
     # Cyto data for EACH personal value.
-    cyto_downstream_adaptations_pv, graph_downstream_adaptations_pv = compute_graphs(subgraph_downstream_adaptations)
+    graph_downstream_adaptations_pv = compute_graphs(subgraph_downstream_adaptations)
     # cyto_downstream_pv, graph_data = compute_graphs(subgraph_downstream)
-
-    cyto_downstream = convert_graph_to_cyto(subgraph_downstream, "increase in greenhouse effect")
-    cyto_upstream = convert_graph_to_cyto(subgraph_upstream, "increase in greenhouse effect")
-    cyto_downstream_adaptations = convert_graph_to_cyto(subgraph_downstream_adaptations,
-                                                        "increase in greenhouse effect")
-    cyto_upstream_mitigations = convert_graph_to_cyto(subgraph_upstream_mitigations, "increase in greenhouse effect")
 
     # Total graphs exported for visualization:
     # subgraph_upstream_mitigations
@@ -861,14 +805,7 @@ def makeGraph(onto_path, edge_path, output_folder_path='.'):
             downstream_adaptations=subgraph_downstream_adaptations,
             upstream=subgraph_upstream,
             downstream=subgraph_downstream,
-            personal_value_slns=graph_downstream_adaptations_pv,
-
-            # Cytoscape data now
-            cyto_downstream=cyto_downstream,
-            cyto_upstream=cyto_upstream,
-            cyto_downstream_adaptations=cyto_downstream_adaptations,
-            cyto_upstream_mitigations=cyto_upstream_mitigations,
-            cyto_downstream_adaptations_pv=cyto_downstream_adaptations_pv
+            **graph_downstream_adaptations_pv
         ), f)
 
     # process myths in networkx object to be easier for API
