@@ -1,3 +1,4 @@
+/*noinspection CssUnusedSymbol*/
 .output_parent {
     display: flex;
     height: 20vh;
@@ -39,6 +40,8 @@
 #dropdowns-div > *{
     flex: 1;
 }
+
+/*noinspection CssUnusedSymbol*/
 #dropdowns-div {
     display: flex;
 }
@@ -55,6 +58,7 @@
     flex: 1 1 20vw;
 }
 
+/*noinspection CssUnusedSymbol*/
 #upper_box {
     display: flex;
 }

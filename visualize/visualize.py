@@ -1,20 +1,35 @@
-import dash
-import networkx as nx
-import dash_html_components as html
-import dash_core_components as dcc
 import pickle
 import textwrap
 
+import dash
+import dash_core_components as dcc
+import dash_html_components as html
+import networkx as nx
 
-def draw_graph(name, G):
-    N = nx.nx_agraph.to_agraph(G)
+
+def draw_graph(name, graph, output_png=False):
+    """
+    Converts an nx.DiGraph into a graphviz agraph. Lets us use layouting/positioning abilities of graphviz.
+    Parameters
+    ----------
+    name - output file name
+    G - nx.DiGraph to convert
+    output_png - whether to write a PNG or not
+
+    Returns
+    -------
+    Graphviz Agraph
+    """
+    N = nx.nx_agraph.to_agraph(graph)
     N.edge_attr.update(directed=True)
     N = N.unflatten(f'-f -l6')
-    N.layout(prog='dot', args='-Gratio=compress -Grankdir=TB -Gnodesep=0.5 -Gfontsize=20')
-    N.draw(f"pictures/{name}.png", "png")
+
+    if output_png:
+        N.layout(prog='dot', args='-Gratio=compress -Grankdir=TB -Gnodesep=0.5 -Gfontsize=20')
+        N.draw(f"pictures/{name}.png", "png")
 
     # When exporting to JS somehow renders it vertically flipped. So we flip it back.
-    N.layout(prog='dot', args='-Gratio=compress -Grankdir=BT -Gfontsize=25')
+    N.layout(prog='dot', args='-Gratio=compress -Grankdir=BT -Gfontsize=25 -Granksep=1 -Gnodesep=1')
 
     return N
 
@@ -41,16 +56,36 @@ with open("graphs_for_visualization.pickle", "rb") as f:
     preprocessed_data = pickle.load(f)
 
 
+def convert_graph_to_cyto(G, tree_root=None):
+    """
+    Converts nx.DiGraph into a cytoscape-compatible elements list.
+    Sample elements list:
 
+        {'data': {'id': 'one', 'label': 'Node 1'}, 'position': {'x': 50, 'y': 50}, 'classes': ['risk-solution']}, # node
+        {'data': {'id': 'two', 'label': 'Node 2'}, 'position': {'x': 200, 'y': 200}},                             # node
+        {'data': {'source': 'one', 'target': 'two', 'label': 'Node 1 to 2'}}                                      # edge
+    Parameters
+    ----------
+    G - nx.DiGraph
+    tree_root - optional parameter to highlight tree root (e.g. personal value) a special color.
 
-def convert_graph_to_cyto(G, tree_root):
+    Returns
+    -------
+    List compatible with cytoscape.js
+    """
+    # Use graphviz to layout the graph for us
+    N = nx.nx_agraph.to_agraph(G)
+    N.edge_attr.update(directed=True)
+    N = N.unflatten('-f -l6')
+    N.layout(prog='dot', args='-Gratio=compress -Grankdir=BT -Gfontsize=25')
+
     for node in G.nodes:
         node_label = G.nodes[node]['label']
         wrapped = textwrap.wrap(node_label, 20)
 
         G.nodes[node]['label'] = "\n".join(wrapped)
-        G.nodes[node]['cyto_width'] = f'{len(max(wrapped, key=len)) / 1.5 + 3.5:.2f}em'
-        G.nodes[node]['cyto_height'] = "{}em".format(len(wrapped) + 3)
+        G.nodes[node]['__cyto_width'] = f'{len(max(wrapped, key=len)) / 1.5 + 3.5:.2f}em'
+        G.nodes[node]['__cyto_height'] = "{}em".format(len(wrapped) + 3)
 
     N = draw_graph(tree_root, G)
 
@@ -59,37 +94,29 @@ def convert_graph_to_cyto(G, tree_root):
     cyto_edges = total_cyto_data['edges']
 
     for edge in cyto_edges:
-        edge['classes'] = []
-        if 'risk solution' in G.nodes[edge['data']['source']] or 'risk solution' in G.nodes[
-            edge['data']['target']]:
-            edge['classes'].append('solution-edge')
-        elif not edge['data']['properties']:
-            # Edge is not connecting to risk solution! Check if it has sources.
-            edge['classes'].append('edge-no-source')
-            # print(edge, 'no source')
+        edge['classes'] = G[edge['data']['source']][edge['data']['target']]['cyto_classes']
 
     # Extract x y positions using graphviz dot algo. Use x,y positions to make cytoscape graph
+    # Also doing some preprocessing
     for node in cyto_nodes:
         graphviz_node = N.get_node(node['data']['id'])
         position = graphviz_node.attr.get('pos', []).split(',')
+        node['classes'] = G.nodes[node['data']['id']]['cyto_classes']
         node['position'] = {'x': int(float(position[0])), 'y': int(float(position[1]))}
-
-        if node['data']['id'] == tree_root:
-            node['classes'] = 'tree_root'
-
-        if 'risk solution' in node['data']:
-            node['classes'] = 'risk-solution'
-
-        if any(node['data']['personal_values_10']):
-            node['classes'] = 'personal-value'
 
     return list(cyto_nodes) + list(cyto_edges)
 
 
 total_cyto_data = {}
-
-for graph in preprocessed_data:
-    total_cyto_data[graph] = convert_graph_to_cyto(preprocessed_data[graph], graph)
+try:
+    with open('processed_cyto_data.pickle', 'rb') as f:
+        total_cyto_data = pickle.load(f)
+except FileNotFoundError:
+    print("Recreating cyto data")
+    for graph in preprocessed_data:
+        total_cyto_data[graph] = convert_graph_to_cyto(preprocessed_data[graph], graph)
+    with open('processed_cyto_data.pickle', 'wb') as f:
+        pickle.dump(total_cyto_data, f)
 
 # Stores the cytograph data so JS code can read it and render it.
 # This data represents all graph data
@@ -202,6 +229,7 @@ def test(input_value):
         nodes = sorted(preprocessed_data['personal_value_slns'][input_value])
     else:
         print("Invalid input value ", input_value)
+        return
     return [{'label': node, 'value': node} for node in nodes]
 
 

@@ -1,6 +1,7 @@
+// noinspection JSFileReferences,JSFileReferences,JSFileReferences,JSFileReferences,JSFileReferences,JSFileReferences
 import cytoscape from 'https://unpkg.com/cytoscape@3.18.1/dist/cytoscape.esm.min.js'
 
-var cy, dijkstra;
+let cy, dijkstra;
 
 
 function save_func(personal_value, storage_index = 1) {
@@ -9,7 +10,7 @@ function save_func(personal_value, storage_index = 1) {
 }
 
 
-export function make_cyto(personal_value, storage_index = 0) {
+export function make_cyto(personal_value, cyto_storage, storage_index = 0) {
     if (cy) {
         cy.destroy()
     }
@@ -38,8 +39,8 @@ export function make_cyto(personal_value, storage_index = 0) {
                         // 'text-max-width': '12em', //TODO: check whether this is necessary?
                         'text-halign': 'center',
                         'text-valign': 'center',
-                        'width': 'data(cyto_width)',
-                        'height': 'data(cyto_height)',
+                        'width': 'data(__cyto_width)',
+                        'height': 'data(__cyto_height)',
                         'font-size': 24,
                         'font-family': 'Segoe UI',
                         'shape': 'round-rectangle',
@@ -125,7 +126,7 @@ var filter_exported = {
     apply_no_long_descs: function () {
         cy.$('.problem-view').removeClass('problem-view')
         cy.nodes('node[properties].personal-value,.risk-solution').forEach(function (node) {
-            if (node.data('properties')['schema_longDescription'].length == 0) {
+            if (node.data('properties')['schema_longDescription'].length === 0) {
                 node.addClass('problem-view')
             }
         })
@@ -154,15 +155,15 @@ var filter_exported = {
     },
     apply_none: function () {
         cy.$('.problem-view').removeClass('problem-view')
-
     },
 
     search_node(search_term) {
         cy.$('.filter-view-two').removeClass('filter-view-two')
-        cy.getElementById(search_term).flashClass("filter-view-two", 1000)
+        cy.getElementById(search_term).flashClass("filter-view-two", 800)
     }
 }
 
+// Export these functions because we're running this as a module.
 window.filter_exported = filter_exported
 
 
@@ -178,11 +179,8 @@ function register_cy_callbacks(cy) {
     cy.listen('mouseover', 'node', function (evt) {
         cy.$('.filter-view-one').removeClass('filter-view-one')
 
-        const mouseover_node_data = evt.target.data();
         const outer_edges = []
         const inner_edges = []
-
-
         evt.target.outgoers('edge').forEach(function (ele, _unused, _unused1) {
             outer_edges.push(ele.data("target"))
         })
@@ -194,7 +192,7 @@ function register_cy_callbacks(cy) {
 
         document.getElementById('outer_edges_output').innerHTML = outer_edges.join('.\n\n')
         document.getElementById('inner_edges_output').innerHTML = inner_edges.join('.\n\n')
-        document.getElementById('node_name_output').innerHTML = evt.target.id()
+        document.getElementById('node_name_output').innerText = evt.target.id()
 
 
         // Add is_highlighted attribute to all nodes
@@ -208,42 +206,17 @@ function register_cy_callbacks(cy) {
         dijkstra.pathTo(evt.target).removeClass("filter-view-one")
 
     })
-
-    document.addEventListener('keydown', function (key) {
-        if (key.code == "KeyS" && key.altKey) {
-            const filter_text = document.getElementById('filter-code').value
-            document.getElementById("errors-output").textContent = 'Processing ' + filter_text + '\n'
-
-            cy.nodes('.filter-view-one').removeClass('filter-view-one')
-
-            cy.nodes().forEach(function (ele, _unused, _unused1) {
-                key.preventDefault()
-                const node = ele.data()
-
-                let filter_passes = false
-                try {
-                    filter_passes = eval(filter_text)
-                } catch (err) {
-                    document.getElementById("errors-output").textContent += err + ' ' + filter_passes + '\n';
-                }
-                document.getElementById("errors-output").textContent += filter_passes + '\n'
-                if (filter_passes) {
-                    ele.addClass('filter-view-one')
-                }
-            })
-        }
-    })
 }
 
 
 document.addEventListener('keydown', function (key) {
-    if (key.code == "Digit1" && key.shiftKey) save_func("increase in physical violence", 1)
-    else if (key.code == "Digit2" && key.shiftKey) save_func("increase in physical violence", 2)
-    else if (key.code == "Digit3" && key.shiftKey) save_func("increase in physical violence", 3)
-    else if (key.code == "Digit1") make_cyto("increase in physical violence", 1)
-    else if (key.code == "Digit2") make_cyto("increase in physical violence", 2)
-    else if (key.code == "Digit3") make_cyto("increase in physical violence", 3)
-    else if (key.code == "KeyR") {
+    if (key.code === "Digit1" && key.shiftKey) save_func("increase in physical violence", 1)
+    else if (key.code === "Digit2" && key.shiftKey) save_func("increase in physical violence", 2)
+    else if (key.code === "Digit3" && key.shiftKey) save_func("increase in physical violence", 3)
+    else if (key.code === "Digit1") make_cyto("increase in physical violence", 1)
+    else if (key.code === "Digit2") make_cyto("increase in physical violence", 2)
+    else if (key.code === "Digit3") make_cyto("increase in physical violence", 3)
+    else if (key.code === "KeyR") {
         localStorage.clear() // Clear local storage
         console.log("Cleared local storage")
     }
