@@ -1,4 +1,3 @@
-import json
 import pickle
 import argparse
 import networkx as nx
@@ -6,7 +5,7 @@ import pandas as pd
 import validators
 
 import owlready2
-from owlready2 import get_ontology, sync_reasoner
+from owlready2 import sync_reasoner
 from collections import OrderedDict
 
 try:
@@ -29,9 +28,6 @@ except ImportError:
         remove_non_test_nodes,
         get_test_ontology,
     )
-
-import os
-
 
 # Set a lower JVM memory limit
 owlready2.reasoning.JAVA_MEMORY = 500
@@ -450,7 +446,123 @@ def local_graph(node, graph, visited_dictionary):
             return graph.nodes[node]["isPossiblyLocal"]
 
 
-def makeGraph(onto_path, edge_path, output_folder_path):
+# Returns the subgraph achieved by BFS on start_node
+def custom_bfs(graph, start_node, direction="forward", edge_type="causes_or_promotes"):
+    """
+    Explores graph and gets the subgraph containing all the nodes that are reached via BFS from start_node
+
+    Parameters
+    ----------
+    graph - nx.DiGraph to explore
+    start_node - root of the BFS search
+    direction - forward, reverse, or any. Controls what direction BFS searches in
+    edge_type - only explore along edges of this type (can be "any")
+
+    Returns
+    -------
+    subgraph with nodes explored
+    """
+    # Using a list because we want to have the explored elements returned later.
+    queue = [start_node]
+    cur_index = 0
+
+    def do_bfs(element):
+        nonlocal cur_index
+        if direction == "reverse" or direction == "any":
+            for start, end, type in graph.in_edges(element, "type"):
+                if start not in queue and (edge_type == "any" or type == edge_type):
+                    queue.append(start)
+        if direction == "forward" or direction == "any":
+            for start, end, type in graph.out_edges(element, "type"):
+                if end not in queue and (edge_type == "any" or type == edge_type):
+                    queue.append(end)
+
+    do_bfs(start_node)
+
+    while cur_index < len(queue):
+        do_bfs(queue[cur_index])
+        cur_index = cur_index + 1
+
+    return graph.subgraph(queue)
+
+
+def annotate_graph_with_problems(graph):
+    """
+    Annotates a graph with information needed for visualization. For example, which nodes are solutions, risks. Which
+    nodes have long descriptions, sources. Which edges have sources.
+
+    Parameters
+    ----------
+    graph - the graph to annotate (modifies the graph)
+    """
+
+    for start, end, data in graph.edges(data=True):
+        edge_attr = graph.edges[start, end]
+
+        # cyto_classes attribute is simply a placeholder.
+        # We'll convert all elements from cyto_classes to cytoscape.js classes in visualize.py script
+        edge_attr["cyto_classes"] = []
+        if "risk solution" in graph.nodes[start] or "risk solution" in graph.nodes[end]:
+            edge_attr["cyto_classes"].append("solution-edge")
+        elif not data["properties"]:
+            # Edge is not connecting to risk solution! Check if it has sources.
+            edge_attr["cyto_classes"].append("edge-no-source")
+            print((start, end), "no sources")
+
+    # Extract x y positions using graphviz dot algo. Use x,y positions to make cytoscape graph
+    # Also doing some preprocessing
+    for node, data in graph.nodes(data=True):
+
+        graph.nodes[node]["cyto_classes"] = []
+
+        risk_or_personal_value_node = False
+        if "risk solution" in data:
+            graph.nodes[node]["cyto_classes"].append("risk-solution")
+
+        if any(data["personal_values_10"]):
+            graph.nodes[node]["cyto_classes"].append("personal-value")
+
+        if risk_or_personal_value_node:
+            if data.get("properties", {}).get("schema_longDescription", "") == "":
+                graph.nodes[node]["cyto_classes"].append("no-long-description")
+
+            # Maybe refactor to use source_types list?
+            if not (
+                data["properties"]["dc_source"]
+                or data["properties"]["schema_academicBook"]
+                or data["properties"]["schema_academicSourceNoPaywall"]
+                or data["properties"]["schema_academicSourceWithPaywall"]
+                or data["properties"]["schema_governmentSource"]
+                or data["properties"]["schema_mediaSource"]
+                or data["properties"]["schema_mediaSourceForConservatives"]
+                or data["properties"]["schema_organizationSource"]
+            ):
+                graph.nodes[node]["cyto_classes"].append("node-no-sources")
+
+
+# Joins subgraphs into a bigger subgraph
+# We can't use nx.union because it doesn't add edges connecting two subgraphs together
+def union_subgraph(subgraphs, *, base_graph):
+    """
+    Joins multiple subgraphs of the same base graph together. Edges connecting subgraphs are also included
+    (whereas nx.union doesn't include edges connecting subgraphs together).
+
+    Parameters
+    ----------
+    subgraphs - a list of subgraphs to union
+    base_graph - forced keyword argument of the graph that these subgraphs are based upon
+
+    Returns
+    -------
+    a new subgraph of base_graph containing all nodes in subgraphs list
+    """
+    G_node_set = set()
+    for other_subg in subgraphs:
+        G_node_set = G_node_set.union(set(other_subg.nodes()))
+    return base_graph.subgraph(G_node_set)
+
+
+def makeGraph(onto_path, edge_path, output_folder_path="."):
     """
     Main function to make networkx graph object from reference ontology and edge list.
 
@@ -508,6 +620,7 @@ def makeGraph(onto_path, edge_path, output_folder_path):
     B = make_acyclic(G)
     all_myths = list(nx.get_node_attributes(B, "myth").keys())
 
+    # What is this for?
     starting_nodes = []
     for node in B.nodes:
         if not list(B.neighbors(node)):
@@ -537,8 +650,11 @@ def makeGraph(onto_path, edge_path, output_folder_path):
                     else:
                         starting_nodes.append(node)
 
+    # Unused
     acyclic_graph = B.copy()
     visited_dict = {}
+
+    # Test_value is unused. starting_nodes is also unused. Maybe delete?
     test_value = local_graph(starting_nodes[1], acyclic_graph, visited_dict)
 
     # feedback loop edges should be severed in the graph copy B
@@ -559,8 +675,25 @@ def makeGraph(onto_path, edge_path, output_folder_path):
         OrderedDict.fromkeys(nodes_upstream_greenhouse_effect)
     )  # this shouldn't include myths!
 
+    # Copy B to make annotations specific to visualizations
+    B_annotated = B.copy()
+
+    # Remove myths.Not necessary to visualize
+    B_annotated.remove_nodes_from(myth for myth in all_myths)
+    annotate_graph_with_problems(B_annotated)
+
+    # Does the same thing. Assert to check correctness
+    # Maybe we can replace with my implementation because I'd need the subgraph AND the nodes list anyways
+    subgraph_upstream = custom_bfs(
+        B_annotated, "increase in greenhouse effect", "reverse"
+    ).copy()
+    assert sorted(nodes_upstream_greenhouse_effect) == sorted(subgraph_upstream.nodes())
+
     # now get all the nodes that have the inhibit relationship with the nodes found in nodes_upstream_greenhouse_effect (these nodes should all be the mitigation solutions)
     mitigation_solutions = list()
+    mitigation_solutions1 = (
+        list()
+    )  # Perhaps a better way to implement this? See below. assertion passes means they're the same code.
 
     for node in nodes_upstream_greenhouse_effect:
         node_neighbors = B.neighbors(node)
@@ -571,7 +704,17 @@ def makeGraph(onto_path, edge_path, output_folder_path):
             ):  # bad to hard code in 'is_inhibited_or_prevented_or_blocked_or_slowed_by'
                 mitigation_solutions.append(neighbor)
 
+    # Iterates through all edges incident to nodes in upstream_greenhouse_effect
+    for start, end, type in B.out_edges(nodes_upstream_greenhouse_effect, "type"):
+        if type == "is_inhibited_or_prevented_or_blocked_or_slowed_by":
+            mitigation_solutions1.append(end)
+
     mitigation_solutions = list(set(mitigation_solutions))
+    mitigation_solutions1 = list(set(mitigation_solutions1))
+
+    # mitigation_solutions1 is cleaner than how it was done before.
+    assert sorted(mitigation_solutions1) == sorted(mitigation_solutions)
+    subgraph_mitigation = B_annotated.subgraph(mitigation_solutions)
 
     # sort the mitigation solutions from highest to lowest CO2 Equivalent Reduced / Sequestered (2020–2050)
     # in Gigatons from Project Drawdown scenario 2
@@ -631,6 +774,15 @@ def makeGraph(onto_path, edge_path, output_folder_path):
     downstream_nodes = nx.dfs_edges(B, "increase in greenhouse effect")
     downstream_nodes = [item for sublist in downstream_nodes for item in sublist]
     nodes_downstream_greenhouse_effect = list(OrderedDict.fromkeys(downstream_nodes))
+
+    # The only difference between nodes_downstream_greenhouse_effect and subgraph_downstream is that my
+    # subgraph_downstream excludes all adaptation solutions.
+    # Only "causation" edges would exclude "person is elderly" or "person is outside often"
+    subgraph_downstream = custom_bfs(
+        B_annotated, "increase in greenhouse effect", edge_type="causes_or_promotes"
+    ).copy()
+
+    total_adaptation_nodes = []
     for effectNode in nodes_downstream_greenhouse_effect:
         intermediate_nodes = nx.all_simple_paths(
             B, "increase in greenhouse effect", effectNode
@@ -677,6 +829,69 @@ def makeGraph(onto_path, edge_path, output_folder_path):
                 {solution: sources},
                 "solution sources",
             )
+        total_adaptation_nodes.extend(node_adaptation_solutions)
+
+    subgraph_adaptations = B_annotated.subgraph(total_adaptation_nodes).copy()
+
+    subgraph_upstream_mitigations = union_subgraph(
+        [subgraph_upstream, subgraph_mitigation], base_graph=B_annotated
+    ).copy()
+    subgraph_downstream_adaptations = union_subgraph(
+        [subgraph_downstream, subgraph_adaptations], base_graph=B_annotated
+    ).copy()
+
+    # Computes an array of elements + nodes to input into cytoscape.js for each personal value
+    # Computes the subgraphs achieved by BFS through each of those personal values
+
+    personal_values = [
+        pv[0] for pv in G.nodes.data("personal_values_10", [None]) if any(pv[1])
+    ]
+
+    # Uncomment to reduce number of cases for faster debug.
+    # personal_values = ['increase in physical violence']
+
+    cyto_data = dict.fromkeys(personal_values)
+
+    graph_downstream_adaptations_pv = dict.fromkeys(personal_values)
+
+    # Make a temporary graph with reversed solutions for easier BFS
+    G_slns_reversed = subgraph_downstream_adaptations.copy()
+
+    # Modifying edge data while iterating. Have to get list before we iterate.
+    g_edges = list(G_slns_reversed.edges(data=True))
+    for start, end, data in g_edges:
+        if subgraph_adaptations.has_node(end):
+            print("Reversing", end)
+            G_slns_reversed.add_edge(end, start, **data)
+            G_slns_reversed.remove_edge(start, end)
+    for value_key in cyto_data:
+        subtree = custom_bfs(
+            G_slns_reversed, value_key, direction="reverse", edge_type="any"
+        )
+
+        # TODO: memory optimizations cause we can convert G_slns_reversed to subtree without copying
+        graph_downstream_adaptations_pv[value_key] = subtree.copy()
+
+    # Total graphs exported for visualization:
+    # subgraph_upstream_mitigations
+    # subgraph_downstream_adaptations
+    # subgraph_upstream
+    # subgraph_downstream
+    #
+    # graph_data: dict of 21 personal values and the graph of risks leading to that personal value
+    # graph_data_slns: same as graph_data except there are adaptation solutions added.
+
+    with open(output_folder_path + "/graphs_for_visualization.pickle", "wb") as f:
+        pickle.dump(
+            dict(
+                upstream_mitigations=subgraph_upstream_mitigations,
+                downstream_adaptations=subgraph_downstream_adaptations,
+                upstream=subgraph_upstream,
+                downstream=subgraph_downstream,
+                **graph_downstream_adaptations_pv
+            ),
+            f,
+        )
 
     # process myths in networkx object to be easier for API
     general_myths = list()
@@ -819,6 +1034,7 @@ def main(args):
     edge_path = args.refEdgeListPath
 
     # run makeGraph function
+    # Doesn't set path? I have to add default argument for path for this to work.
     makeGraph(onto_path, edge_path)
 
 
