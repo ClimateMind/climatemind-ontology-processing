@@ -1,12 +1,61 @@
 // noinspection JSFileReferences,JSFileReferences,JSFileReferences,JSFileReferences,JSFileReferences,JSFileReferences
 import cytoscape from 'https://unpkg.com/cytoscape@3.18.1/dist/cytoscape.esm.min.js'
 
-let cy, dijkstra;
+let cy, dijkstra, old_filter_value;
 
 
 function save_func(personal_value, storage_index = 1) {
     localStorage.setItem(`cytoscape_graph_cache_${personal_value}_${storage_index}`, JSON.stringify(cy.json()))
     document.title = `saved ${storage_index}`
+}
+
+var filter_exported = {
+    apply_no_long_descs: function () {
+        cy.$('.problem-view').removeClass('problem-view')
+        cy.nodes('node[properties].personal-value,.risk-solution').forEach(function (node) {
+            if (node.data('properties')['schema_longDescription'].length === 0) {
+                node.addClass('problem-view')
+            }
+        })
+    },
+    apply_no_sources: function () {
+        cy.$('.problem-view').removeClass('problem-view')
+        cy.nodes('node[properties].personal-value, .risk-solution').forEach(function (node) {
+            const node_props = node.data('properties')
+            if (!(node_props['dc_source'].length ||
+                node_props['schema_academicBook'].length ||
+                node_props['schema_academicSourceNoPaywall'].length ||
+                node_props['schema_academicSourceWithPaywall'].length ||
+                node_props['schema_governmentSource'].length ||
+                node_props['schema_mediaSource'].length ||
+                node_props['schema_mediaSourceForConservatives'].length ||
+                node_props['schema_organizationSource'].length)) {
+                node.addClass('problem-view')
+            }
+        })
+
+        cy.edges('.edge-no-source').addClass('problem-view')
+    },
+    apply_personal_values: function () {
+        cy.$('.problem-view').removeClass('problem-view')
+        cy.nodes('.personal-value').addClass('problem-view')
+    },
+    apply_none: function () {
+        cy.$('.problem-view').removeClass('problem-view')
+    },
+
+    search_node(search_term) {
+        cy.$('.filter-view-two').removeClass('filter-view-two')
+        cy.getElementById(search_term).flashClass("filter-view-two", 800)
+    },
+    apply_filter(filter_value = old_filter_value) {
+        if (filter_value === "no_long_desc") this.apply_no_long_descs()
+        else if (filter_value === "no_sources") this.apply_no_sources()
+        else if (filter_value === "none") this.apply_none()
+        else if (filter_value === "personal_values") this.apply_personal_values()
+
+        old_filter_value = filter_value
+    }
 }
 
 
@@ -16,7 +65,7 @@ export function make_cyto(personal_value, cyto_storage, storage_index = 0) {
     }
     console.log("Making new graph")
     cy = cytoscape({
-            container: document.getElementById('cyto-graph-container'), // container to render in
+            container: document.getElementById('cytoscape-graph-container'), // container to render in
             // Moving nodes around will actually change data in cyto_storage.
             // Cytoscape owns all objects given to it. Maybe we should create a deep copy?
             elements: cyto_storage[personal_value],
@@ -101,9 +150,7 @@ export function make_cyto(personal_value, cyto_storage, storage_index = 0) {
                 name: 'preset'
             },
             wheelSensitivity: 0.15
-        }
-    )
-    ;
+        });
 
     let local_storage_key = `cytoscape_graph_cache_${personal_value}_${storage_index}`
     if (localStorage.getItem(local_storage_key) && storage_index) {
@@ -112,56 +159,16 @@ export function make_cyto(personal_value, cyto_storage, storage_index = 0) {
         cy.json(cytoscape_graph_cache)
     }
     register_cy_callbacks(cy)
-
+    filter_exported.apply_filter()
 // For console debugging only.
     window.cy = cy;
 
-    dash_clientside.clientside.update_filter("__use_old")
+
     dijkstra = cy.elements().dijkstra(cy.getElementById("increase in greenhouse effect"), () => {
         return 1
     }, true)
 }
 
-var filter_exported = {
-    apply_no_long_descs: function () {
-        cy.$('.problem-view').removeClass('problem-view')
-        cy.nodes('node[properties].personal-value,.risk-solution').forEach(function (node) {
-            if (node.data('properties')['schema_longDescription'].length === 0) {
-                node.addClass('problem-view')
-            }
-        })
-    },
-    apply_no_sources: function () {
-        cy.$('.problem-view').removeClass('problem-view')
-        cy.nodes('node[properties].personal-value, .risk-solution').forEach(function (node) {
-            const node_props = node.data('properties')
-            if (!(node_props['dc_source'].length ||
-                node_props['schema_academicBook'].length ||
-                node_props['schema_academicSourceNoPaywall'].length ||
-                node_props['schema_academicSourceWithPaywall'].length ||
-                node_props['schema_governmentSource'].length ||
-                node_props['schema_mediaSource'].length ||
-                node_props['schema_mediaSourceForConservatives'].length ||
-                node_props['schema_organizationSource'].length)) {
-                node.addClass('problem-view')
-            }
-        })
-
-        cy.edges('.edge-no-source').addClass('problem-view')
-    },
-    apply_personal_values: function () {
-        cy.$('.problem-view').removeClass('problem-view')
-        cy.nodes('.personal-value').addClass('problem-view')
-    },
-    apply_none: function () {
-        cy.$('.problem-view').removeClass('problem-view')
-    },
-
-    search_node(search_term) {
-        cy.$('.filter-view-two').removeClass('filter-view-two')
-        cy.getElementById(search_term).flashClass("filter-view-two", 800)
-    }
-}
 
 // Export these functions because we're running this as a module.
 window.filter_exported = filter_exported
@@ -173,8 +180,8 @@ function register_cy_callbacks(cy) {
     })
 
     cy.listen('click', 'node', function (evt) {
-        document.getElementById('object_output').textContent = JSON.stringify(evt.target.data(), undefined, 2)
-        document.getElementById('object_output').setAttribute("web_protege_iri", evt.target.data('iri'))
+        document.getElementById('object-output').textContent = JSON.stringify(evt.target.data(), undefined, 2)
+        document.getElementById('object-output').setAttribute("web_protege_iri", evt.target.data('iri'))
     })
     cy.listen('mouseover', 'node', function (evt) {
         cy.$('.filter-view-one').removeClass('filter-view-one')
@@ -192,7 +199,7 @@ function register_cy_callbacks(cy) {
 
         document.getElementById('outer_edges_output').innerHTML = outer_edges.join('.\n\n')
         document.getElementById('inner_edges_output').innerHTML = inner_edges.join('.\n\n')
-        document.getElementById('node_name_output').innerText = evt.target.id()
+        document.getElementById('big-node-name').innerText = evt.target.id()
 
 
         // Add is_highlighted attribute to all nodes

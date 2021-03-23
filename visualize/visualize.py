@@ -1,6 +1,6 @@
 import pickle
 import textwrap
-
+import os
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -50,6 +50,10 @@ app = dash.Dash(__name__,
 # edge_data = {personal_value: edges_to_dict(graph) for personal_value, graph in graph_data_slns.items()}
 # Cache in set so we avoid computation
 
+if not os.path.exists("graphs_for_visualization.pickle"):
+    from ontology_processing.graph_creation.make_graph import makeGraph
+
+    makeGraph('Bx50aIKwEALYNmYl0CFzNp.owl', 'output.csv')
 
 # Have to run makegraph function first to get the pickle!
 with open("graphs_for_visualization.pickle", "rb") as f:
@@ -108,10 +112,10 @@ def convert_graph_to_cyto(G, tree_root=None):
 
 
 total_cyto_data = {}
-try:
+if os.environ['DEBUG_USE_CACHE']:
     with open('processed_cyto_data.pickle', 'rb') as f:
         total_cyto_data = pickle.load(f)
-except FileNotFoundError:
+else:
     print("Recreating cyto data")
     for graph in preprocessed_data:
         total_cyto_data[graph] = convert_graph_to_cyto(preprocessed_data[graph], graph)
@@ -125,42 +129,30 @@ cyto_storage = dcc.Store(
     storage_type='memory',
     data=total_cyto_data
 )
+
+layout_parts = {
+    'graph-select': dcc.Dropdown(
+        id='graph-select',
+        className='dropdowns',
+        options=[
+            {'label': name, 'value': name} for name in total_cyto_data.keys()
+        ],
+        value="downstream",
+        placeholder="graph type"
+    ),
+    'node-search': dcc.Dropdown(
+        id='node-search',
+        className='dropdowns',
+        placeholder="Search for nodes"
+    ),
+    'right-controls': html.Div(id="right-controls"),
+    'cytoscape-graph-container': html.Div(id="cytoscape-graph-container"),
+    'bottom-controls': html.Div(id='bottom-controls')
+}
+
 app.layout = html.Div([
     cyto_storage,
-    html.Div(
-        [
-            html.Div(
-                [
-                    html.Div([
-                        dcc.Dropdown(
-                            id='select',
-                            className='dropdowns',
-                            options=[
-                                {'label': name, 'value': name} for name in total_cyto_data.keys()
-                            ],
-                            value="downstream",
-                            placeholder="graph type"
-                        ), dcc.Dropdown(
-                            id='search-nodes',
-                            className='dropdowns',
-                            placeholder="Search for nodes"
-                        )], id="dropdowns-div"),
-                    html.Div(id='cyto-graph-container')]
-                , id="graph"),
-            html.Div(id="right_controls", children=[
-                dcc.Dropdown(
-                    id="filter-type",
-                    options=[
-                        {'label': 'Personal value nodes/solutions without long descriptions', 'value': 'no_long_desc'},
-                        {'label': 'Personal value nodes/edges without sources', 'value': 'no_sources'},
-                        {'label': 'All personal values', 'value': 'personal_values'},
-                        {'label': 'None', 'value': 'none'}
-                    ],
-                    placeholder="Choose filter"
-                )
-            ])]
-        , id="upper_box"),
-    html.Div(id='output', style={'whiteSpace': 'pre-wrap'}),
+    html.Div(children=list(layout_parts.values()), className='grid-container'),
     html.Div(id='dummy1'), html.Div(id='dummy2'), html.Div(id='dummy3'), html.Div(id='dummy4'), html.Div(id='dummy5')
 ])
 
@@ -176,15 +168,6 @@ app.clientside_callback(
     dash.dependencies.Input('dummy1', 'children')
 )
 
-app.clientside_callback(
-    dash.dependencies.ClientsideFunction(
-        namespace='clientside',
-        function_name='update_filter'
-    ),
-    dash.dependencies.Output('dummy4', 'children'),
-    dash.dependencies.Input('filter-type', 'value')
-)
-
 # Updates the personal values in the dropdown.
 app.clientside_callback(
     dash.dependencies.ClientsideFunction(
@@ -192,7 +175,7 @@ app.clientside_callback(
         function_name='update_personal_value'
     ),
     dash.dependencies.Output('dummy3', 'children'),
-    [dash.dependencies.Input('select', 'value')],
+    [dash.dependencies.Input('graph-select', 'value')],
 )
 
 # Copies our Python cytoscape_data to Javascript.
@@ -214,13 +197,13 @@ app.clientside_callback(
         function_name='search_nodes'
     ),
     dash.dependencies.Output('dummy5', 'children'),
-    [dash.dependencies.Input('search-nodes', 'value')],
+    [dash.dependencies.Input('node-search', 'value')],
 )
 
 
 @app.callback(
-    dash.dependencies.Output('search-nodes', 'options'),
-    dash.dependencies.Input('select', 'value')
+    dash.dependencies.Output('node-search', 'options'),
+    dash.dependencies.Input('graph-select', 'value')
 )
 def test(input_value):
     if input_value in preprocessed_data:
