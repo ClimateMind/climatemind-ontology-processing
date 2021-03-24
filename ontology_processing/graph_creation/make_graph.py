@@ -269,17 +269,6 @@ def set_edge_properties(G):
     ----------
     G: A networkx Graph
     """
-    source_types = [
-        "dc_source",
-        "schema_academicBook",
-        "schema_academicSourceNoPaywall",
-        "schema_academicSourceWithPaywall",
-        "schema_governmentSource",
-        "schema_mediaSource",
-        "schema_mediaSourceForConservatives",
-        "schema_organizationSource",
-    ]
-
     to_remove = {}
     for edge in list(G.edges):
         node_a = edge[0]
@@ -293,8 +282,8 @@ def set_edge_properties(G):
 
             for prop in G.nodes[node_a]["properties"].keys():
                 if (
-                    prop in source_types
-                ):  # ensures only the source_types above are considered
+                    prop in SOURCE_TYPES
+                ):  # ensures only the SOURCE_TYPES above are considered
                     node_a_prop_sources = set(G.nodes[node_a]["properties"][prop])
                     node_b_prop_sources = set(G.nodes[node_b]["properties"][prop])
                     intersection = node_a_prop_sources & node_b_prop_sources
@@ -526,20 +515,31 @@ def annotate_graph_with_problems(graph):
 
         graph.nodes[node]["cyto_classes"] = []
 
-        risk_or_personal_value_node = False
+        solution_node = False
+        pv_node = False
         if "risk solution" in data:
             graph.nodes[node]["cyto_classes"].append("risk-solution")
 
+            if not any([graph.nodes[node]['properties'][source] for source in SOURCE_TYPES]):
+                graph.nodes[node]["cyto_classes"].append("node-no-sources")
+                print(node, " no sources")
+            solution_node = True
+
         if any(data["personal_values_10"]):
             graph.nodes[node]["cyto_classes"].append("personal-value")
+            pv_node = True
 
-        if risk_or_personal_value_node:
-            if data.get("properties", {}).get("schema_longDescription", ""):
+        if solution_node or pv_node:
+            if not data.get("properties", {}).get("schema_longDescription", ""):
                 graph.nodes[node]["cyto_classes"].append("no-long-description")
 
-            for source in SOURCE_TYPES:
-                if data["properties"][source]:
-                    graph.nodes[node]["cyto_classes"].append("node-no-sources")
+            if not solution_node:
+                # Check that the node has an incoming edge that has sources
+                # end is same as 'node'
+                for start, end, edge_data in graph.in_edges(node, data='properties'):
+                    # If there are not any sources
+                    if not set(edge_data.keys()).intersection(SOURCE_TYPES):
+                        graph.nodes[node]["cyto_classes"].append("node-no-sources")
 
 
 # Joins subgraphs into a bigger subgraph
