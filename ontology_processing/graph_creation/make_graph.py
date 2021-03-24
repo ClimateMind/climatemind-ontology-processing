@@ -512,7 +512,6 @@ def annotate_graph_with_problems(graph):
     # Extract x y positions using graphviz dot algo. Use x,y positions to make cytoscape graph
     # Also doing some preprocessing
     for node, data in graph.nodes(data=True):
-
         graph.nodes[node]["cyto_classes"] = []
 
         solution_node = False
@@ -521,8 +520,7 @@ def annotate_graph_with_problems(graph):
             graph.nodes[node]["cyto_classes"].append("risk-solution")
 
             if not any([graph.nodes[node]['properties'][source] for source in SOURCE_TYPES]):
-                graph.nodes[node]["cyto_classes"].append("node-no-sources")
-                print(node, " no sources")
+                graph.nodes[node]["cyto_classes"].append("node-no-source")
             solution_node = True
 
         if any(data["personal_values_10"]):
@@ -536,11 +534,15 @@ def annotate_graph_with_problems(graph):
             if not solution_node:
                 # Check that the node has an incoming edge that has sources
                 # end is same as 'node'
-                for start, end, edge_data in graph.in_edges(node, data='properties'):
+                has_source = False
+                for start, end, edge_properties in graph.in_edges(node, data='properties'):
                     # If there are not any sources
-                    if not set(edge_data.keys()).intersection(SOURCE_TYPES):
-                        graph.nodes[node]["cyto_classes"].append("node-no-sources")
+                    if set(edge_properties.keys()).intersection(SOURCE_TYPES):
+                        has_source = True
+                        break
 
+                if not has_source:
+                    graph.nodes[node]["cyto_classes"].append("node-no-sources")
 
 # Joins subgraphs into a bigger subgraph
 # We can't use nx.union because it doesn't add edges connecting two subgraphs together
