@@ -239,6 +239,10 @@ def add_ontology_data_to_graph_nodes(G, onto):
         attributes_dict["personal_values_10"] = personal_values_10
         attributes_dict["personal_values_19"] = personal_values_19
 
+        conservative = attributes_dict["data_properties"]["conservative"]
+        liberal = attributes_dict["data_properties"]["liberal"]
+        # Hard coded order! Conservative first, liberal second.
+        attributes_dict["political_value"] = [conservative, liberal]
         # if there are multiple of the nested classes associated with the node in the ontology, code ensures it doesn't overwrite the other class.
 
         G.add_nodes_from([(node, attributes_dict)])
