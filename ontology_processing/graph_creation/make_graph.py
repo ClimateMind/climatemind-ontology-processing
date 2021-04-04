@@ -32,6 +32,18 @@ except ImportError:
 # Set a lower JVM memory limit
 owlready2.reasoning.JAVA_MEMORY = 500
 
+# convenient source types list
+SOURCE_TYPES = [
+    "dc_source",
+    "schema_academicBook",
+    "schema_academicSourceNoPaywall",
+    "schema_academicSourceWithPaywall",
+    "schema_governmentSource",
+    "schema_mediaSource",
+    "schema_mediaSourceForConservatives",
+    "schema_organizationSource",
+]
+
 
 def solution_sources(node, source_types):
     """Returns a flattened list of custom solution source values from each node key that matches
@@ -507,7 +519,6 @@ def annotate_graph_with_problems(graph):
         elif not data["properties"]:
             # Edge is not connecting to risk solution! Check if it has sources.
             edge_attr["cyto_classes"].append("edge-no-source")
-            print((start, end), "no sources")
 
     # Extract x y positions using graphviz dot algo. Use x,y positions to make cytoscape graph
     # Also doing some preprocessing
@@ -523,21 +534,12 @@ def annotate_graph_with_problems(graph):
             graph.nodes[node]["cyto_classes"].append("personal-value")
 
         if risk_or_personal_value_node:
-            if data.get("properties", {}).get("schema_longDescription", "") == "":
+            if data.get("properties", {}).get("schema_longDescription", ""):
                 graph.nodes[node]["cyto_classes"].append("no-long-description")
 
-            # Maybe refactor to use source_types list?
-            if not (
-                data["properties"]["dc_source"]
-                or data["properties"]["schema_academicBook"]
-                or data["properties"]["schema_academicSourceNoPaywall"]
-                or data["properties"]["schema_academicSourceWithPaywall"]
-                or data["properties"]["schema_governmentSource"]
-                or data["properties"]["schema_mediaSource"]
-                or data["properties"]["schema_mediaSourceForConservatives"]
-                or data["properties"]["schema_organizationSource"]
-            ):
-                graph.nodes[node]["cyto_classes"].append("node-no-sources")
+            for source in SOURCE_TYPES:
+                if data["properties"][source]:
+                    graph.nodes[node]["cyto_classes"].append("node-no-sources")
 
 
 # Joins subgraphs into a bigger subgraph
@@ -585,19 +587,6 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
     with onto:
         sync_reasoner()
 
-    # convenient source types list
-    source_types = [
-        "dc_source",
-        "schema_academicBook",
-        "schema_academicSourceNoPaywall",
-        "schema_academicSourceWithPaywall",
-        "schema_governmentSource",
-        "schema_mediaSource",
-        "schema_mediaSourceForConservatives",
-        "schema_organizationSource",
-    ]
-
-    # print(list(default_world.inconsistent_classes()))
 
     # Read in the triples data
     ## DMARX - csv via make_network.outputEdges()
@@ -620,61 +609,6 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
     B = make_acyclic(G)
     all_myths = list(nx.get_node_attributes(B, "myth").keys())
 
-    # What is this for?
-    starting_nodes = []
-    for node in B.nodes:
-        if not list(B.neighbors(node)):
-            if (
-                "test ontology" in B.nodes[node]
-                and B.nodes[node]["test ontology"][0] == "test ontology"
-            ):
-                if "risk solution" in B.nodes[node]:
-                    if "risk solution" not in B.nodes[node]["risk solution"]:
-                        starting_nodes.append(node)
-                else:
-                    starting_nodes.append(node)
-        else:
-            neighbor_nodes = B.neighbors(node)
-            has_no_child = True
-            for neighbor in neighbor_nodes:
-                if B[node][neighbor]["type"] == "causes_or_promotes":
-                    has_no_child = False
-            if has_no_child:
-                if (
-                    "test ontology" in B.nodes[node]
-                    and B.nodes[node]["test ontology"][0] == "test ontology"
-                ):
-                    if "risk solution" in B.nodes[node]:
-                        if "risk solution" not in B.nodes[node]["risk solution"]:
-                            starting_nodes.append(node)
-                    else:
-                        starting_nodes.append(node)
-
-    # Unused
-    acyclic_graph = B.copy()
-    visited_dict = {}
-
-    # Test_value is unused. starting_nodes is also unused. Maybe delete?
-    test_value = local_graph(starting_nodes[1], acyclic_graph, visited_dict)
-
-    # feedback loop edges should be severed in the graph copy B
-    edges_upstream_greenhouse_effect = nx.edge_dfs(
-        B, "increase in greenhouse effect", orientation="reverse"
-    )
-
-    nodes_upstream_greenhouse_effect = list()
-    for edge in edges_upstream_greenhouse_effect:
-        nodeA = edge[0]
-        nodeB = edge[1]
-        if B[nodeA][nodeB]["type"] == "causes_or_promotes":
-            nodes_upstream_greenhouse_effect.append(nodeA)
-            nodes_upstream_greenhouse_effect.append(nodeB)
-
-        # get unique ones
-    nodes_upstream_greenhouse_effect = list(
-        OrderedDict.fromkeys(nodes_upstream_greenhouse_effect)
-    )  # this shouldn't include myths!
-
     # Copy B to make annotations specific to visualizations
     B_annotated = B.copy()
 
@@ -687,33 +621,17 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
     subgraph_upstream = custom_bfs(
         B_annotated, "increase in greenhouse effect", "reverse"
     ).copy()
-    assert sorted(nodes_upstream_greenhouse_effect) == sorted(subgraph_upstream.nodes())
 
+    nodes_upstream_greenhouse_effect = list(subgraph_upstream.nodes())
     # now get all the nodes that have the inhibit relationship with the nodes found in nodes_upstream_greenhouse_effect (these nodes should all be the mitigation solutions)
     mitigation_solutions = list()
-    mitigation_solutions1 = (
-        list()
-    )  # Perhaps a better way to implement this? See below. assertion passes means they're the same code.
-
-    for node in nodes_upstream_greenhouse_effect:
-        node_neighbors = B.neighbors(node)
-        for neighbor in node_neighbors:
-            if (
-                B[node][neighbor]["type"]
-                == "is_inhibited_or_prevented_or_blocked_or_slowed_by"
-            ):  # bad to hard code in 'is_inhibited_or_prevented_or_blocked_or_slowed_by'
-                mitigation_solutions.append(neighbor)
 
     # Iterates through all edges incident to nodes in upstream_greenhouse_effect
     for start, end, type in B.out_edges(nodes_upstream_greenhouse_effect, "type"):
         if type == "is_inhibited_or_prevented_or_blocked_or_slowed_by":
-            mitigation_solutions1.append(end)
+            mitigation_solutions.append(end)
 
     mitigation_solutions = list(set(mitigation_solutions))
-    mitigation_solutions1 = list(set(mitigation_solutions1))
-
-    # mitigation_solutions1 is cleaner than how it was done before.
-    assert sorted(mitigation_solutions1) == sorted(mitigation_solutions)
     subgraph_mitigation = B_annotated.subgraph(mitigation_solutions)
 
     # sort the mitigation solutions from highest to lowest CO2 Equivalent Reduced / Sequestered (2020–2050)
@@ -752,7 +670,7 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
 
     # add solution sources field to all mitigation solution nodes
     for solution in mitigation_solutions:
-        sources = solution_sources(G.nodes[solution], source_types)
+        sources = solution_sources(G.nodes[solution], SOURCE_TYPES)
         if sources:
             nx.set_node_attributes(
                 G,
@@ -771,11 +689,14 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
     # adaptation is defined as solutions to the node or any node upstream of the node up until the node 'increase in greenhouse effect'.
 
     # get all the nodes that are downstream of 'increase in greenhouse effect'. should be all the impact/effect node... could probably get these by doing class search too
-    downstream_nodes = nx.dfs_edges(B, "increase in greenhouse effect")
-    downstream_nodes = [item for sublist in downstream_nodes for item in sublist]
-    nodes_downstream_greenhouse_effect = list(OrderedDict.fromkeys(downstream_nodes))
+    # also includes nodes that are "has exposure dependencies of, like "person is in the marines", 'person is in a community likely without air conditioning', 'person is elderly'
+    # so not exclusive to risks + adaptations.
+    # This subgraph also contains cytoscape annotations (like cyto_classes), so shouldn't query the properties as they are not reflective of webprotege.
+    subgraph_downstream_adaptations = custom_bfs(
+        B_annotated, "increase in greenhouse effect", edge_type="any"
+    ).copy()
 
-    # The only difference between nodes_downstream_greenhouse_effect and subgraph_downstream is that my
+    # The only difference between subgraph_downstream_adaptations and subgraph_downstream is that my
     # subgraph_downstream excludes all adaptation solutions.
     # Only "causation" edges would exclude "person is elderly" or "person is outside often"
     subgraph_downstream = custom_bfs(
@@ -783,7 +704,7 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
     ).copy()
 
     total_adaptation_nodes = []
-    for effectNode in nodes_downstream_greenhouse_effect:
+    for effectNode in subgraph_downstream_adaptations.nodes():
         intermediate_nodes = nx.all_simple_paths(
             B, "increase in greenhouse effect", effectNode
         )
@@ -823,7 +744,7 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
 
         # add solution sources field to all adaptation solution nodes
         for solution in node_adaptation_solutions:
-            sources = solution_sources(G.nodes[solution], source_types)
+            sources = solution_sources(G.nodes[solution], SOURCE_TYPES)
             nx.set_node_attributes(
                 G,
                 {solution: sources},
@@ -836,21 +757,18 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
     subgraph_upstream_mitigations = union_subgraph(
         [subgraph_upstream, subgraph_mitigation], base_graph=B_annotated
     ).copy()
-    subgraph_downstream_adaptations = union_subgraph(
-        [subgraph_downstream, subgraph_adaptations], base_graph=B_annotated
-    ).copy()
 
     # Computes an array of elements + nodes to input into cytoscape.js for each personal value
     # Computes the subgraphs achieved by BFS through each of those personal values
 
     personal_values = [
-        pv[0] for pv in G.nodes.data("personal_values_10", [None]) if any(pv[1])
+        label
+        for label, pv_ranking in G.nodes.data("personal_values_10", [None])
+        if any(pv_ranking)
     ]
 
     # Uncomment to reduce number of cases for faster debug.
     # personal_values = ['increase in physical violence']
-
-    cyto_data = dict.fromkeys(personal_values)
 
     graph_downstream_adaptations_pv = dict.fromkeys(personal_values)
 
@@ -861,15 +779,12 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
     g_edges = list(G_slns_reversed.edges(data=True))
     for start, end, data in g_edges:
         if subgraph_adaptations.has_node(end):
-            print("Reversing", end)
             G_slns_reversed.add_edge(end, start, **data)
             G_slns_reversed.remove_edge(start, end)
-    for value_key in cyto_data:
+    for value_key in personal_values:
         subtree = custom_bfs(
             G_slns_reversed, value_key, direction="reverse", edge_type="any"
         )
-
-        # TODO: memory optimizations cause we can convert G_slns_reversed to subtree without copying
         graph_downstream_adaptations_pv[value_key] = subtree.copy()
 
     # Total graphs exported for visualization:
@@ -912,7 +827,7 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
                     nx.set_node_attributes(
                         G, {neighbor: solution_myths}, "solution myths"
                     )
-                if neighbor in nodes_downstream_greenhouse_effect:
+                if subgraph_downstream_adaptations.has_node(neighbor):
                     if "impact myths" not in G.nodes[neighbor].keys():
                         impact_myths = []
                     else:
@@ -923,7 +838,7 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
                     general_myths.append(myth)
         # process myth sources into nice field called 'myth sources' with only unique urls from any source type
         myth_sources = list()
-        for source_type in source_types:
+        for source_type in SOURCE_TYPES:
             if (
                 "properties" in G.nodes[myth]
                 and source_type in G.nodes[myth]["properties"]
@@ -991,7 +906,7 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
 
             for sources_dict in causal_sources:
                 for key in sources_dict:
-                    if key in source_types:
+                    if key in SOURCE_TYPES:
                         sources_list.extend(sources_dict[key])
 
             # remove duplicate urls
