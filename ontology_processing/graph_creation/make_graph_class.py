@@ -344,6 +344,9 @@ class MakeGraph:
             sources_after_removing = list(sources_before_removing - to_remove[item])
             self.G.nodes[node]["properties"][prop] = sources_after_removing
 
+    def get_graph(self):
+        return self.G
+
     B = make_acyclic(G)
     all_myths = list(nx.get_node_attributes(B, "myth").keys())
 

@@ -18,6 +18,7 @@ try:
         remove_non_test_nodes,
         get_test_ontology,
     )
+    from graph_creation.graph_utils import custom_bfs
 except ImportError:
     from ontology_processing.graph_creation.ontology_processing_utils import (
         give_alias,
@@ -28,6 +29,7 @@ except ImportError:
         remove_non_test_nodes,
         get_test_ontology,
     )
+    from ontology_processing.graph_creation.graph_utils import custom_bfs
 
 # Set a lower JVM memory limit
 owlready2.reasoning.JAVA_MEMORY = 500
@@ -41,7 +43,28 @@ def make_graph():
     mg.build_attributes_dict()
     to_remove = mg.set_edge_properties()
     mg.remove_edge_properties_from_nodes(to_remove)
+    G = mg.get_graph()
 
+    viz = ProcessVisualization()
+    viz.remove_myths()
+    viz.annotate_graph_with_problems()
+
+
+    B = make_acyclic(G)
+    all_myths = list(nx.get_node_attributes(B, "myth").keys())
+
+    # Copy B to make annotations specific to visualizations
+    B_annotated = B.copy()
+
+    # Remove myths.Not necessary to visualize
+    B_annotated.remove_nodes_from(myth for myth in all_myths)
+    annotate_graph_with_problems(B_annotated)
+
+    # Does the same thing. Assert to check correctness
+    # Maybe we can replace with my implementation because I'd need the subgraph AND the nodes list anyways
+    subgraph_upstream = custom_bfs(
+        B_annotated, "increase in greenhouse effect", "reverse"
+    ).copy()
 
 
 def solution_sources(node, source_types):
