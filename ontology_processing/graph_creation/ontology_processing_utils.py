@@ -2,6 +2,17 @@ import networkx as nx
 from networkx.readwrite import json_graph
 import os
 
+def get_source_types():
+    return [
+        "dc_source",
+        "schema_academicBook",
+        "schema_academicSourceNoPaywall",
+        "schema_academicSourceWithPaywall",
+        "schema_governmentSource",
+        "schema_mediaSource",
+        "schema_mediaSourceForConservatives",
+        "schema_organizationSource",
+    ]
 
 def get_valid_test_ont():
     return {

@@ -32,17 +32,16 @@ except ImportError:
 # Set a lower JVM memory limit
 owlready2.reasoning.JAVA_MEMORY = 500
 
-# convenient source types list
-SOURCE_TYPES = [
-    "dc_source",
-    "schema_academicBook",
-    "schema_academicSourceNoPaywall",
-    "schema_academicSourceWithPaywall",
-    "schema_governmentSource",
-    "schema_mediaSource",
-    "schema_mediaSourceForConservatives",
-    "schema_organizationSource",
-]
+def make_graph():
+    mg = MakeGraph(onto_path, edge_path, output_folder_path)
+    mg.load_ontology()
+    mg.set_properties()
+    mg.automate_reasoning()
+    mg.add_edges_to_graph()
+    mg.build_attributes_dict()
+    to_remove = mg.set_edge_properties()
+    mg.remove_edge_properties_from_nodes(to_remove)
+
 
 
 def solution_sources(node, source_types):
@@ -91,248 +90,6 @@ def compute(values):
             raise Exception("Node found that has opposing vector values 1 and -1")
 
     return final
-
-
-def add_ontology_data_to_graph_nodes(G, onto):
-    """Find the equivalent nodes in the ontology and load in relevant data
-    including the classes they belong to.
-
-    Parameters
-    ----------
-    G: A networkx Graph
-    onto: owlready2 ontology object
-    """
-    # This shouldn't need to be repeated for each node.
-    # Moved out of loop.
-    cm_class = onto.search_one(label="climate mind")
-    superclasses = list(cm_class.subclasses())
-
-    # get annotation properties for all objects of the ontology (whether node or class)
-    annot_properties = [
-        thing.label[0].replace(":", "_")
-        for thing in list(onto.annotation_properties())
-        if thing.label
-    ]
-
-    # get data properties for all objects of the ontology (whether node or class)
-    data_properties = [
-        thing.label[0].replace(" ", "_")
-        for thing in list(onto.data_properties())
-        if thing.label
-    ]
-
-    for node in list(G.nodes):
-        ontology_node = onto.search_one(label=node)
-
-        class_objects = onto.get_parents_of(ontology_node)
-
-        attributes_dict = {}
-        attributes_dict["label"] = str(ontology_node.label[0])
-        attributes_dict["iri"] = str(ontology_node)
-        attributes_dict["comment"] = str(ontology_node.comment)
-        attributes_dict["direct classes"] = listify(class_objects, onto)
-
-        all_classes = []
-        for parent in class_objects:
-            if parent in onto.classes():
-                all_classes.extend(parent.ancestors())
-
-        list_classes = listify(all_classes, onto)
-        list_classes = list(set(list_classes))
-        if "climate mind" in list_classes:
-            list_classes.remove("climate mind")
-        attributes_dict["all classes"] = list_classes
-
-        # for each class in the classes associated with the node, list that class in the appropriate super_class in the attributes_dict and all of the ancestor classes of that class
-        for node_class in class_objects:
-            for super_class in superclasses:
-                if node_class in super_class.descendants():
-                    to_add = listify(node_class.ancestors(), onto)
-                    if "climate mind" in to_add:
-                        to_add.remove("climate mind")
-                    if super_class in attributes_dict.keys():
-                        attributes_dict[str(super_class.label[0])] = list(
-                            set(attributes_dict[super_class]) | set(to_add)
-                        )
-                    else:
-                        attributes_dict[str(super_class.label[0])] = to_add
-
-        attributes_dict["properties"] = {
-            prop: list(getattr(ontology_node, prop)) for prop in annot_properties
-        }
-
-        attributes_dict["data_properties"] = {
-            prop: getattr(ontology_node, prop) for prop in data_properties
-        }
-
-        # format personal_values_10 and personal_values_19 to facilitate easier scoring later by the climate mind app
-        # these are hard coded in and the order is very important. Later can change so these aren't hard coded and the order is always alphebetical(?)
-        # use the compute function to collapse a value with multiple subvalues into one number. As long as there's any 1, then the final value is 1 (otherwise 0). None if all are None.
-
-        personal_values_19 = [
-            attributes_dict["data_properties"]["achievement"],
-            attributes_dict["data_properties"]["benevolence_caring"],
-            attributes_dict["data_properties"]["benevolence_dependability"],
-            attributes_dict["data_properties"]["conformity_interpersonal"],
-            attributes_dict["data_properties"]["conformity_rules"],
-            attributes_dict["data_properties"]["face"],
-            attributes_dict["data_properties"]["hedonism"],
-            attributes_dict["data_properties"]["humility"],
-            attributes_dict["data_properties"]["power_dominance"],
-            attributes_dict["data_properties"]["power_resources"],
-            attributes_dict["data_properties"]["security_personal"],
-            attributes_dict["data_properties"]["security_societal"],
-            attributes_dict["data_properties"]["self-direction_autonomy_of_action"],
-            attributes_dict["data_properties"]["self-direction_autonomy_of_thought"],
-            attributes_dict["data_properties"]["stimulation"],
-            attributes_dict["data_properties"]["tradition"],
-            attributes_dict["data_properties"]["universalism_concern"],
-            attributes_dict["data_properties"]["universalism_nature"],
-            attributes_dict["data_properties"]["universalism_tolerance"],
-        ]
-
-        achievement = attributes_dict["data_properties"]["achievement"]
-        benevolence = compute(
-            [
-                attributes_dict["data_properties"]["benevolence_caring"],
-                attributes_dict["data_properties"]["benevolence_dependability"],
-            ]
-        )
-        conformity = compute(
-            [
-                attributes_dict["data_properties"]["conformity_interpersonal"],
-                attributes_dict["data_properties"]["conformity_rules"],
-            ]
-        )
-        hedonism = attributes_dict["data_properties"]["hedonism"]
-        power = compute(
-            [
-                attributes_dict["data_properties"]["power_dominance"],
-                attributes_dict["data_properties"]["power_resources"],
-            ]
-        )
-        security = compute(
-            [
-                attributes_dict["data_properties"]["security_personal"],
-                attributes_dict["data_properties"]["security_societal"],
-            ]
-        )
-        self_direction = compute(
-            [
-                attributes_dict["data_properties"]["self-direction_autonomy_of_action"],
-                attributes_dict["data_properties"][
-                    "self-direction_autonomy_of_thought"
-                ],
-            ]
-        )
-        stimulation = attributes_dict["data_properties"]["stimulation"]
-        tradition = attributes_dict["data_properties"]["tradition"]
-        universalism = compute(
-            [
-                attributes_dict["data_properties"]["universalism_concern"],
-                attributes_dict["data_properties"]["universalism_nature"],
-                attributes_dict["data_properties"]["universalism_tolerance"],
-            ]
-        )
-
-        personal_values_10 = [
-            achievement,
-            benevolence,
-            conformity,
-            hedonism,
-            power,
-            security,
-            self_direction,
-            stimulation,
-            tradition,
-            universalism,
-        ]
-
-        attributes_dict["personal_values_10"] = personal_values_10
-        attributes_dict["personal_values_19"] = personal_values_19
-
-        conservative = attributes_dict["data_properties"]["conservative"]
-        liberal = attributes_dict["data_properties"]["liberal"]
-        # Hard coded order! Conservative first, liberal second.
-        attributes_dict["political_value"] = [conservative, liberal]
-        # if there are multiple of the nested classes associated with the node in the ontology, code ensures it doesn't overwrite the other class.
-
-        G.add_nodes_from([(node, attributes_dict)])
-
-        # the if statement is needed to avoid the Restriction objects
-        # still don't know why Restriction Objects are in our ontology!
-        # technically each class could have multiple labels, but this way just pulling 1st label
-
-
-def set_edge_properties(G):
-    """Add edge annotation properties that exist on both nodes of an edge
-    and create a list of properties to remove from the nodes.
-    (Only source properties that exist on both nodes of an edge are only for the edge)
-
-    Parameters
-    ----------
-    G: A networkx Graph
-    """
-    source_types = [
-        "dc_source",
-        "schema_academicBook",
-        "schema_academicSourceNoPaywall",
-        "schema_academicSourceWithPaywall",
-        "schema_governmentSource",
-        "schema_mediaSource",
-        "schema_mediaSourceForConservatives",
-        "schema_organizationSource",
-    ]
-
-    to_remove = {}
-    for edge in list(G.edges):
-        node_a = edge[0]
-        node_b = edge[1]
-        edge_attributes_dict = {}
-
-        if (
-            G[node_a][node_b]["type"]
-            != "is_inhibited_or_prevented_or_blocked_or_slowed_by"
-        ):
-
-            for prop in G.nodes[node_a]["properties"].keys():
-                if (
-                    prop in source_types
-                ):  # ensures only the source_types above are considered
-                    node_a_prop_sources = set(G.nodes[node_a]["properties"][prop])
-                    node_b_prop_sources = set(G.nodes[node_b]["properties"][prop])
-                    intersection = node_a_prop_sources & node_b_prop_sources
-
-                    # add intersection to edge property dictionary, ensuring if items already exist for that key, then they are added to the list
-                    if intersection:
-                        edge_attributes_dict[prop] = list(intersection)
-
-                        if (node_a, prop) in to_remove.keys():
-                            to_remove[(node_a, prop)] = (
-                                to_remove[(node_a, prop)] | intersection
-                            )
-                        else:
-                            to_remove[(node_a, prop)] = intersection
-
-                        if (node_b, prop) in to_remove.keys():
-                            to_remove[(node_b, prop)] = (
-                                to_remove[(node_b, prop)] | intersection
-                            )
-                        else:
-                            to_remove[(node_b, prop)] = intersection
-
-        # add edge_attributes_dict to edge
-        G.add_edge(node_a, node_b, properties=edge_attributes_dict)
-
-        # alternative way of adding attributes to edges is commented out below:
-        # nx.set_edge_attributes(
-        #     G,
-        #     {(node_a,node_b): edge_attributes_dict},
-        #     "properties",
-        # )
-
-    return to_remove
-
 
 def remove_edge_properties_from_nodes(G, to_remove):
     """Remove sources from properties from Networkx nodes when those sources occur on both nodes of an edge
@@ -567,6 +324,20 @@ def union_subgraph(subgraphs, *, base_graph):
         G_node_set = G_node_set.union(set(other_subg.nodes()))
     return base_graph.subgraph(G_node_set)
 
+def load_ontology(onto_path):
+    """
+    Load ontology and format object properties and annotation properties into Python readable names.
+    """
+    my_world = owlready2.World()
+    onto = my_world.get_ontology(onto_path).load()
+    obj_properties = list(onto.object_properties())
+    annot_properties = list(onto.annotation_properties())
+    data_properties = list(onto.data_properties())
+    [give_alias(x) for x in obj_properties if x.label]
+    [give_alias(x) for x in annot_properties if x.label]
+    [give_alias(x) for x in data_properties if x.label]
+    return obj_properties, annot_properties, data_properties
+
 
 def makeGraph(onto_path, edge_path, output_folder_path="."):
     """
@@ -577,20 +348,6 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
     output: saves a python pickle file of the networkx object, and yaml and json of the networkx object
     """
 
-    # Load ontology and format object properties and annotation properties into Python readable names
-    my_world = owlready2.World()
-    onto = my_world.get_ontology(onto_path).load()
-    obj_properties = list(onto.object_properties())
-    annot_properties = list(onto.annotation_properties())
-    data_properties = list(onto.data_properties())
-    [give_alias(x) for x in obj_properties if x.label]
-    [give_alias(x) for x in annot_properties if x.label]
-    [give_alias(x) for x in data_properties if x.label]
-
-    # run automated reasoning.
-    with onto:
-        sync_reasoner()
-
 
     # Read in the triples data
     ## DMARX - csv via make_network.outputEdges()
@@ -598,11 +355,7 @@ def makeGraph(onto_path, edge_path, output_folder_path="."):
     # ... If we've already processed the ontology through the Network object,
     # why do we need to reload it here?
     # Can we move add_ontology_data_to_graph_nodes to network_class?
-    df_edges = pd.read_csv(edge_path)
 
-    G = nx.DiGraph()
-    for src, tgt, kind in df_edges.values:
-        G.add_edge(src, tgt, type=kind, properties=None)
 
     add_ontology_data_to_graph_nodes(G, onto)
     to_remove = set_edge_properties(G)
