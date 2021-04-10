@@ -14,6 +14,23 @@ def get_source_types():
         "schema_organizationSource",
     ]
 
+def solution_sources(node):
+    """Returns a flattened list of custom solution source values from each node key that matches
+    custom_source_types string.
+    node - NetworkX node
+    source_types - list of sources types
+    """
+    source_types = get_source_types()
+    # loop over each solution source key and append each returned value to the solution_sources list
+    solution_source_list = list()
+    for source_type in source_types:
+        if "properties" in node and source_type in node["properties"]:
+            solution_source_list.extend(node["properties"][source_type])
+
+    solution_source_list = list(OrderedDict.fromkeys(solution_source_list))
+
+    return solution_source_list
+
 def get_valid_test_ont():
     return {
         "test ontology",

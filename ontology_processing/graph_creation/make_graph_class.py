@@ -9,6 +9,7 @@ try:
         get_test_ontology,
         get_source_types,
     )
+    from graph_creation.graph_utils import custom_bfs, solution_sources
 except ImportError:
     from ontology_processing.graph_creation.ontology_processing_utils import (
         give_alias,
@@ -20,6 +21,7 @@ except ImportError:
         get_test_ontology,
         get_source_types,
     )
+    from ontology_processing.graph_creation.graph_utils import custom_bfs, solution_sources
 
 class MakeGraph:
     def __init__(self, onto_path, edge_path, output_folder_path="."):
@@ -347,8 +349,56 @@ class MakeGraph:
     def get_graph(self):
         return self.G
 
-    B = make_acyclic(G)
-    all_myths = list(nx.get_node_attributes(B, "myth").keys())
+    def add_mitigations(self, mitigation_solutions):
+        """
+        Sort the mitigation solutions from highest to lowest
+        CO2 Equivalent Reduced / Sequestered (2020–2050)
+        in Gigatons from Project Drawdown scenario 2.
+        """
+
+        mitigation_solutions_with_co2 = dict()
+        mitigation_solutions_no_co2 = []
+
+        for solution in mitigation_solutions:
+            if (
+                solution not in mitigation_solutions_with_co2
+                and G.nodes[solution]["data_properties"]["CO2_eq_reduced"]
+            ):
+                mitigation_solutions_with_co2[solution] = G.nodes[solution][
+                    "data_properties"
+                ]["CO2_eq_reduced"]
+            elif solution not in mitigation_solutions_no_co2:
+                mitigation_solutions_no_co2.append(solution)
+
+        mitigation_solutions_co2_sorted = sorted(
+            mitigation_solutions_with_co2,
+            key=mitigation_solutions_with_co2.get,
+            reverse=True,
+        )
+
+        mitigation_solutions_co2_sorted.extend(mitigation_solutions_no_co2)
+
+        mitigation_solutions = mitigation_solutions_co2_sorted
+
+        # update the networkx object to have a 'mitigation solutions' field
+        # and include in it all nodes from mitigation_solutions
+        nx.set_node_attributes(
+            self.G,
+            {"increase in greenhouse effect": mitigation_solutions},
+            "mitigation solutions",
+        )
+
+        # add solution sources field to all mitigation solution nodes
+        for solution in mitigation_solutions:
+            sources = solution_sources(self.G.nodes[solution], SOURCE_TYPES)
+            if sources:
+                nx.set_node_attributes(
+                    G,
+                    {solution: sources},
+                    "solution sources",
+                )
+
+
 
 
 

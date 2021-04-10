@@ -28,7 +28,7 @@ class ProcessVisualization:
     def __init__(self, graph):
         self.graph = make_acyclic(graph)
         self.subgraph_upstream = None
-        pass
+        self.subgraph_mitigation = None
 
     def remove_myths(self, G):
         """
@@ -36,12 +36,6 @@ class ProcessVisualization:
         """
         all_myths = list(nx.get_node_attributes(self.graph, "myth").keys())
         self.graph.remove_nodes_from(myth for myth in all_myths)
-
-        # Does the same thing. Assert to check correctness
-        # Maybe we can replace with my implementation because I'd need the subgraph AND the nodes list anyways
-        self.subgraph_upstream = custom_bfs(
-            self.graph, "increase in greenhouse effect", "reverse"
-        ).copy()
 
     def annotate_graph_with_problems(self):
         """
@@ -84,3 +78,26 @@ class ProcessVisualization:
                 for source in SOURCE_TYPES:
                     if data["properties"][source]:
                         self.graph.nodes[node]["cyto_classes"].append("node-no-sources")
+
+    def create_subgraph(self):
+        """Grabs a subgraph of the 'increase in greenhouse effect' tree"""
+        self.subgraph_upstream = custom_bfs(
+            self.graph, "increase in greenhouse effect", "reverse"
+        ).copy()
+
+    def create_mitigations(self):
+        """
+        Get all the nodes that have the inhibit relationship with the nodes
+        found in nodes_upstream_greenhouse_effect (these nodes should all be
+        the mitigation solutions).
+        """
+        nodes_upstream_greenhouse_effect = list(self.subgraph_upstream.nodes())
+        mitigation_solutions = list()
+
+        # Iterates through all edges incident to nodes in upstream_greenhouse_effect
+        for start, end, type in B.out_edges(nodes_upstream_greenhouse_effect, "type"):
+            if type == "is_inhibited_or_prevented_or_blocked_or_slowed_by":
+                mitigation_solutions.append(end)
+
+        mitigation_solutions = list(set(mitigation_solutions))
+        self.subgraph_mitigation = self.graph.subgraph(mitigation_solutions)
