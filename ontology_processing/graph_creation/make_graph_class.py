@@ -32,7 +32,11 @@ class MakeGraph:
         self.object_properties = None
         self.annot_properties = None
         self.data_properties = None
+        self.all_myths = None
         self.G = nx.DiGraph()
+        self.B = None
+        self.B_annotated = None
+        self.subgraph_upstream = None
 
     def load_ontology(self):
         """
@@ -302,7 +306,8 @@ class MakeGraph:
                         node_b_prop_sources = set(self.G.nodes[node_b]["properties"][prop])
                         intersection = node_a_prop_sources & node_b_prop_sources
 
-                        # add intersection to edge property dictionary, ensuring if items already exist for that key, then they are added to the list
+                        # add intersection to edge property dictionary, ensuring if items already exist 
+                        # for that key, then they are added to the list
                         if intersection:
                             edge_attributes_dict[prop] = list(intersection)
 
@@ -348,6 +353,73 @@ class MakeGraph:
 
     def get_graph(self):
         return self.G
+
+    def make_annotated(self):
+        """
+        Create an annotated graph used for visualization
+        """
+        self.all_myths = list(nx.get_node_attributes(self.B, "myth").keys())
+
+        # Copy B to make annotations specific to visualizations
+        self.B_annotated = B.copy()
+
+        # Myths not necessary to visualize
+        self.B_annotated.remove_nodes_from(myth for myth in all_myths)
+
+    def make_acyclic(self):
+        """
+        Converts a climate mind graph into an acyclic version by removing all the feedback loop edges.
+        """
+        self.B = G.copy()
+        # identify nodes that are in the class 'feedback loop' then remove 
+        # those nodes' 'causes' edges because they start feedback loops.
+        feedback_nodes = list()
+        graph_attributes_dictionary = nx.get_node_attributes(self.B, "direct classes")
+
+        for node in graph_attributes_dictionary:
+            if "feedback loop" in graph_attributes_dictionary[node]:
+                feedback_nodes.append(node)
+        # get the 'causes' edges that lead out of the feedback_nodes
+        # must only remove edges that cause increase in greenhouse gases... 
+        # so only remove edges if the neighbor is of the class 'increase in atmospheric greenhouse gas'
+        feedbackloop_edges = list()
+        for node in feedback_nodes:
+            node_neighbors = self.B.neighbors(node)
+            for neighbor in node_neighbors:
+                if (
+                    "increase in atmospheric greenhouse gas"
+                    in graph_attributes_dictionary[neighbor]
+                    or "root cause linked to humans"
+                    in graph_attributes_dictionary[neighbor]
+                ):
+                    # should make this 'increase in atmospheric greenhouse gas' not hard coded!
+                    if (
+                        self.B[node][neighbor]["type"] == "causes_or_promotes"
+                    ):  # should probably make this so the causes_or_promotes isn't hard coded!
+                        feedbackloop_edges.append((node, neighbor))
+
+        # remove all the feedback loop edges
+        for feedbackloopEdge in feedbackloop_edges:
+            nodeA = feedbackloopEdge[0]
+            nodeB = feedbackloopEdge[1]
+            self.B.remove_edge(nodeA, nodeB)
+
+    def get_mitigations(self):
+        """
+        Get all the nodes that have the inhibit relationship 
+        with the nodes found in nodes_upstream_greenhouse_effect 
+        (these nodes should all be the mitigation solutions)
+        """
+        nodes_upstream_greenhouse_effect = list(self.subgraph_upstream.nodes())
+        mitigation_solutions = list()
+
+        # Iterates through all edges incident to nodes in upstream_greenhouse_effect
+        for start, end, type in B.out_edges(nodes_upstream_greenhouse_effect, "type"):
+            if type == "is_inhibited_or_prevented_or_blocked_or_slowed_by":
+                mitigation_solutions.append(end)
+
+        mitigation_solutions = list(set(mitigation_solutions))
+        subgraph_mitigation = B_annotated.subgraph(mitigation_solutions)
 
     def add_mitigations(self, mitigation_solutions):
         """
@@ -397,6 +469,155 @@ class MakeGraph:
                     {solution: sources},
                     "solution sources",
                 )
+
+    def annotate_graph_with_problems(self):
+        """
+        Annotates a graph with information needed for visualization. 
+        For example, which nodes are solutions, risks. Which
+        nodes have long descriptions, sources. Which edges have sources.
+        """
+        for start, end, data in self.B_annotated.edges(data=True):
+            edge_attr = self.B_annotated.edges[start, end]
+
+            # cyto_classes attribute is simply a placeholder.
+            # We'll convert all elements from cyto_classes to cytoscape.js classes in visualize.py script
+            edge_attr["cyto_classes"] = []
+            if "risk solution" in self.B_annotated.nodes[start] or "risk solution" in self.B_annotated.nodes[end]:
+                edge_attr["cyto_classes"].append("solution-edge")
+            elif not data["properties"]:
+                # Edge is not connecting to risk solution! Check if it has sources.
+                edge_attr["cyto_classes"].append("edge-no-source")
+
+        # Extract x y positions using graphviz dot algo. Use x,y positions to make cytoscape graph
+        # Also doing some preprocessing
+        for node, data in self.B_annotated.nodes(data=True):
+
+            self.B_annotated.nodes[node]["cyto_classes"] = []
+
+            risk_or_personal_value_node = False
+            if "risk solution" in data:
+                self.B_annotated.nodes[node]["cyto_classes"].append("risk-solution")
+
+            if any(data["personal_values_10"]):
+                self.B_annotated.nodes[node]["cyto_classes"].append("personal-value")
+
+            if risk_or_personal_value_node:
+                if data.get("properties", {}).get("schema_longDescription", ""):
+                    self.B_annotated.nodes[node]["cyto_classes"].append("no-long-description")
+
+                for source in SOURCE_TYPES:
+                    if data["properties"][source]:
+                        self.B_annotated.nodes[node]["cyto_classes"].append("node-no-sources")
+
+    
+    def create_subgraph(self):
+        self.subgraph_upstream = custom_bfs(
+            self.B_annotated, "increase in greenhouse effect", "reverse"
+        ).copy()
+
+    def get_subgraphs_for_viz(self):
+        """
+        Get all the nodes that are downstream of 'increase in greenhouse effect'. 
+        should be all the impact/effect node... could probably get these by doing 
+        a class search too. Also includes nodes that are "has exposure dependencies of", 
+        like "person is in the marines", 'person is in a community likely without air conditioning', or
+        'person is elderly' so not exclusive to risks + adaptations.
+        This subgraph also contains cytoscape annotations (like cyto_classes), 
+        so shouldn't query the properties as they are not reflective of webprotege.
+        """
+        subgraph_downstream_adaptations = custom_bfs(
+            B_annotated, "increase in greenhouse effect", edge_type="any"
+        ).copy()
+
+        # The only difference between subgraph_downstream_adaptations and subgraph_downstream is that my
+        # subgraph_downstream excludes all adaptation solutions.
+        # Only "causation" edges would exclude "person is elderly" or "person is outside often"
+        subgraph_downstream = custom_bfs(
+            B_annotated, "increase in greenhouse effect", edge_type="causes_or_promotes"
+        ).copy()
+
+        total_adaptation_nodes = []
+        for effectNode in subgraph_downstream_adaptations.nodes():
+            intermediate_nodes = nx.all_simple_paths(
+                B, "increase in greenhouse effect", effectNode
+            )
+            # collapse nested lists and remove duplicates
+            intermediate_nodes = [
+                item for sublist in intermediate_nodes for item in sublist
+            ]
+            intermediate_nodes = list(
+                dict.fromkeys(intermediate_nodes)
+            )  # gets unique nodes
+            node_adaptation_solutions = list()
+            for intermediateNode in intermediate_nodes:
+                node_neighbors = G.neighbors(intermediateNode)
+                for neighbor in node_neighbors:
+                    if (
+                        G[intermediateNode][neighbor]["type"]
+                        == "is_inhibited_or_prevented_or_blocked_or_slowed_by"
+                    ):  # bad to hard code in 'is_inhibited_or_prevented_or_blocked_or_slowed_by'
+                        node_adaptation_solutions.append(neighbor)
+            # add the adaptation solutions to the networkx object for the node
+            # be sure that solutions don't show up as effectNodes! and that they aren't solutions to themself! the code needs to be changed to avoid this.
+            # ^solutions shouldn't be added as solutions to themself!
+            node_adaptation_solutions = list(
+                OrderedDict.fromkeys(node_adaptation_solutions)
+            )  # gets unique nodes
+            # print(str(effectNode)+": "+str(node_adaptation_solutions))
+
+            # need to add a check here that doesn't add to effectNode attributes the effectNode as an adaptation solution (solution nodes should have themself as an adaptation solution!)
+            nx.set_node_attributes(
+                G, {effectNode: node_adaptation_solutions}, "adaptation solutions"
+            )
+
+            # add solution sources field to all adaptation solution nodes
+            for solution in node_adaptation_solutions:
+                sources = solution_sources(G.nodes[solution], SOURCE_TYPES)
+                nx.set_node_attributes(
+                    G,
+                    {solution: sources},
+                    "solution sources",
+                )
+            total_adaptation_nodes.extend(node_adaptation_solutions)
+
+        subgraph_adaptations = B_annotated.subgraph(total_adaptation_nodes).copy()
+
+        subgraph_upstream_mitigations = union_subgraph(
+            [subgraph_upstream, subgraph_mitigation], base_graph=B_annotated
+        ).copy()
+
+        # Computes an array of elements + nodes to input into cytoscape.js for each personal value
+        # Computes the subgraphs achieved by BFS through each of those personal values
+
+        personal_values = [
+            label
+            for label, pv_ranking in G.nodes.data("personal_values_10", [None])
+            if any(pv_ranking)
+        ]
+
+        # Uncomment to reduce number of cases for faster debug.
+        # personal_values = ['increase in physical violence']
+
+        graph_downstream_adaptations_pv = dict.fromkeys(personal_values)
+
+        # Make a temporary graph with reversed solutions for easier BFS
+        G_slns_reversed = subgraph_downstream_adaptations.copy()
+
+        # Modifying edge data while iterating. Have to get list before we iterate.
+        g_edges = list(G_slns_reversed.edges(data=True))
+        for start, end, data in g_edges:
+            if subgraph_adaptations.has_node(end):
+                G_slns_reversed.add_edge(end, start, **data)
+                G_slns_reversed.remove_edge(start, end)
+        for value_key in personal_values:
+            subtree = custom_bfs(
+                G_slns_reversed, value_key, direction="reverse", edge_type="any"
+            )
+            graph_downstream_adaptations_pv[value_key] = subtree.copy()
+    
+        return subgraph_upstream_mitigations, subgraph_downstream_adaptations, subgraph_upstream, subgraph_downstream, graph_downstream_adaptations_pv
+        
+
 
 
 
