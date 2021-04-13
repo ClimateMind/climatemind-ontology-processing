@@ -1,3 +1,6 @@
+import validators
+import networkx as nx
+
 try:
     from graph_creation.ontology_processing_utils import (
         get_source_types,
@@ -14,6 +17,7 @@ class ProcessCausalSources:
     def __init__(self, G):
         self.G = G
         self.source_types = get_source_types()
+        self.causal_sources = None
     
     def process_sources(self):
         """
@@ -22,31 +26,31 @@ class ProcessCausalSources:
         for target_node in self.G.nodes:
             self.get_causal_relationships(target_node)
 
-            if causal_sources:
-                self.collapse_url()
+            if self.causal_sources:
+                self.collapse_url(target_node)
 
     def get_causal_relationships(self, target_node):
         """
         Get list nodes that have a relationship with the target node (are neighbor nodes), 
         then filter it down to just the nodes with the causal relationship with the target node
         """
-        causal_sources = list()
+        self.causal_sources = list()
         predecessor_nodes = self.G.predecessors(target_node)
         for predecessor_node in predecessor_nodes:
             if self.G[predecessor_node][target_node]["type"] == "causes_or_promotes":
                 if self.G[predecessor_node][target_node]["properties"]:
-                    causal_sources.append(
+                    self.causal_sources.append(
                         self.G[predecessor_node][target_node]["properties"]
                     )
 
-    def collapse_url(self):
+    def collapse_url(self, target_node):
         """
         Collapse down to just list of unique urls. Strips off the type of source
         and the edge it originates from
         """
         sources_list = list()
 
-        for sources_dict in causal_sources:
+        for sources_dict in self.causal_sources:
             for key in sources_dict:
                 if key in self.source_types:
                     sources_list.extend(sources_dict[key])

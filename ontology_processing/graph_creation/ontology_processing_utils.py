@@ -2,6 +2,66 @@ import networkx as nx
 from networkx.readwrite import json_graph
 import os
 
+from collections import OrderedDict
+
+def custom_bfs(graph, start_node, direction="forward", edge_type="causes_or_promotes"):
+    """
+    Explores graph and gets the subgraph containing all the nodes that are reached via BFS from start_node
+    Parameters
+    ----------
+    graph - nx.DiGraph to explore
+    start_node - root of the BFS search
+    direction - forward, reverse, or any. Controls what direction BFS searches in
+    edge_type - only explore along edges of this type (can be "any")
+    Returns
+    -------
+    subgraph with nodes explored
+    """
+    # Using a list because we want to have the explored elements returned later.
+    queue = [start_node]
+    cur_index = 0
+
+    def do_bfs(element):
+        nonlocal cur_index
+        if direction == "reverse" or direction == "any":
+            for start, end, type in graph.in_edges(element, "type"):
+                if start not in queue and (edge_type == "any" or type == edge_type):
+                    queue.append(start)
+        if direction == "forward" or direction == "any":
+            for start, end, type in graph.out_edges(element, "type"):
+                if end not in queue and (edge_type == "any" or type == edge_type):
+                    queue.append(end)
+
+    do_bfs(start_node)
+
+    while cur_index < len(queue):
+        do_bfs(queue[cur_index])
+        cur_index = cur_index + 1
+
+    return graph.subgraph(queue)
+
+    
+def union_subgraph(subgraphs, *, base_graph):
+    """
+    Joins multiple subgraphs of the same base graph together. Edges connecting subgraphs are also included
+    (whereas nx.union doesn't include edges connecting subgraphs together).
+    Parameters
+    ----------
+    subgraphs - a list of subgraphs to union
+    base_graph - forced keyword argument of the graph that these subgraphs are based upon
+    Returns
+    -------
+    a new subgraph of base_graph containing all nodes in subgraphs list
+    """
+    G_node_set = set()
+    for other_subg in subgraphs:
+        G_node_set = G_node_set.union(set(other_subg.nodes()))
+    return base_graph.subgraph(G_node_set)
+
+def listify(collection, onto):
+    """just capturing a repeated operation"""
+    return [str(thing.label[0]) for thing in collection if thing in onto.classes()]
+
 def get_source_types():
     return [
         "dc_source",

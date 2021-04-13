@@ -1,3 +1,13 @@
+import pickle
+import argparse
+import networkx as nx
+import pandas as pd
+import validators
+
+import owlready2
+from owlready2 import sync_reasoner
+from collections import OrderedDict
+
 try:
     from graph_creation.ontology_processing_utils import (
         give_alias,
@@ -8,8 +18,11 @@ try:
         remove_non_test_nodes,
         get_test_ontology,
         get_source_types,
+        solution_sources,
+        listify,
+        union_subgraph,
+        custom_bfs,
     )
-    from graph_creation.graph_utils import custom_bfs, solution_sources
 except ImportError:
     from ontology_processing.graph_creation.ontology_processing_utils import (
         give_alias,
@@ -20,8 +33,14 @@ except ImportError:
         remove_non_test_nodes,
         get_test_ontology,
         get_source_types,
+        solution_sources,
+        listify,
+        union_subgraph,
+        custom_bfs,
     )
-    from ontology_processing.graph_creation.graph_utils import custom_bfs, solution_sources
+
+# Set a lower JVM memory limit
+owlready2.reasoning.JAVA_MEMORY = 500
 
 class MakeGraph:
     def __init__(self, onto_path, edge_path, output_folder_path="."):
@@ -37,6 +56,8 @@ class MakeGraph:
         self.B = None
         self.B_annotated = None
         self.subgraph_upstream = None
+        self.superclasses = None
+        self.subgraph_mitigation = None
 
     def load_ontology(self):
         """
@@ -70,7 +91,7 @@ class MakeGraph:
 
     def build_attributes_dict(self):
         cm_class = self.onto.search_one(label="climate mind")
-        superclasses = list(cm_class.subclasses())
+        self.superclasses = list(cm_class.subclasses())
 
         # get annotation properties for all objects of the ontology (whether node or class)
         annot_properties = [
@@ -121,7 +142,7 @@ class MakeGraph:
 
         # for each class in the classes associated with the node, list that class in the appropriate super_class in the attributes_dict and all of the ancestor classes of that class
         for node_class in class_objects:
-            for super_class in superclasses:
+            for super_class in self.superclasses:
                 if node_class in super_class.descendants():
                     to_add = listify(node_class.ancestors(), self.onto)
                     if "climate mind" in to_add:
@@ -361,16 +382,16 @@ class MakeGraph:
         self.all_myths = list(nx.get_node_attributes(self.B, "myth").keys())
 
         # Copy B to make annotations specific to visualizations
-        self.B_annotated = B.copy()
+        self.B_annotated = self.B.copy()
 
         # Myths not necessary to visualize
-        self.B_annotated.remove_nodes_from(myth for myth in all_myths)
+        self.B_annotated.remove_nodes_from(myth for myth in self.all_myths)
 
     def make_acyclic(self):
         """
         Converts a climate mind graph into an acyclic version by removing all the feedback loop edges.
         """
-        self.B = G.copy()
+        self.B = self.G.copy()
         # identify nodes that are in the class 'feedback loop' then remove 
         # those nodes' 'causes' edges because they start feedback loops.
         feedback_nodes = list()
@@ -414,12 +435,13 @@ class MakeGraph:
         mitigation_solutions = list()
 
         # Iterates through all edges incident to nodes in upstream_greenhouse_effect
-        for start, end, type in B.out_edges(nodes_upstream_greenhouse_effect, "type"):
+        for start, end, type in self.B.out_edges(nodes_upstream_greenhouse_effect, "type"):
             if type == "is_inhibited_or_prevented_or_blocked_or_slowed_by":
                 mitigation_solutions.append(end)
 
         mitigation_solutions = list(set(mitigation_solutions))
-        subgraph_mitigation = B_annotated.subgraph(mitigation_solutions)
+        self.subgraph_mitigation = self.B_annotated.subgraph(mitigation_solutions)
+        return mitigation_solutions, nodes_upstream_greenhouse_effect
 
     def add_mitigations(self, mitigation_solutions):
         """
@@ -434,9 +456,9 @@ class MakeGraph:
         for solution in mitigation_solutions:
             if (
                 solution not in mitigation_solutions_with_co2
-                and G.nodes[solution]["data_properties"]["CO2_eq_reduced"]
+                and self.G.nodes[solution]["data_properties"]["CO2_eq_reduced"]
             ):
-                mitigation_solutions_with_co2[solution] = G.nodes[solution][
+                mitigation_solutions_with_co2[solution] = self.G.nodes[solution][
                     "data_properties"
                 ]["CO2_eq_reduced"]
             elif solution not in mitigation_solutions_no_co2:
@@ -462,10 +484,10 @@ class MakeGraph:
 
         # add solution sources field to all mitigation solution nodes
         for solution in mitigation_solutions:
-            sources = solution_sources(self.G.nodes[solution], SOURCE_TYPES)
+            sources = solution_sources(self.G.nodes[solution])
             if sources:
                 nx.set_node_attributes(
-                    G,
+                    self.G,
                     {solution: sources},
                     "solution sources",
                 )
@@ -526,20 +548,20 @@ class MakeGraph:
         so shouldn't query the properties as they are not reflective of webprotege.
         """
         subgraph_downstream_adaptations = custom_bfs(
-            B_annotated, "increase in greenhouse effect", edge_type="any"
+            self.B_annotated, "increase in greenhouse effect", edge_type="any"
         ).copy()
 
         # The only difference between subgraph_downstream_adaptations and subgraph_downstream is that my
         # subgraph_downstream excludes all adaptation solutions.
         # Only "causation" edges would exclude "person is elderly" or "person is outside often"
         subgraph_downstream = custom_bfs(
-            B_annotated, "increase in greenhouse effect", edge_type="causes_or_promotes"
+            self.B_annotated, "increase in greenhouse effect", edge_type="causes_or_promotes"
         ).copy()
 
         total_adaptation_nodes = []
         for effectNode in subgraph_downstream_adaptations.nodes():
             intermediate_nodes = nx.all_simple_paths(
-                B, "increase in greenhouse effect", effectNode
+                self.B, "increase in greenhouse effect", effectNode
             )
             # collapse nested lists and remove duplicates
             intermediate_nodes = [
@@ -550,10 +572,10 @@ class MakeGraph:
             )  # gets unique nodes
             node_adaptation_solutions = list()
             for intermediateNode in intermediate_nodes:
-                node_neighbors = G.neighbors(intermediateNode)
+                node_neighbors = self.G.neighbors(intermediateNode)
                 for neighbor in node_neighbors:
                     if (
-                        G[intermediateNode][neighbor]["type"]
+                        self.G[intermediateNode][neighbor]["type"]
                         == "is_inhibited_or_prevented_or_blocked_or_slowed_by"
                     ):  # bad to hard code in 'is_inhibited_or_prevented_or_blocked_or_slowed_by'
                         node_adaptation_solutions.append(neighbor)
@@ -563,27 +585,26 @@ class MakeGraph:
             node_adaptation_solutions = list(
                 OrderedDict.fromkeys(node_adaptation_solutions)
             )  # gets unique nodes
-            # print(str(effectNode)+": "+str(node_adaptation_solutions))
 
             # need to add a check here that doesn't add to effectNode attributes the effectNode as an adaptation solution (solution nodes should have themself as an adaptation solution!)
             nx.set_node_attributes(
-                G, {effectNode: node_adaptation_solutions}, "adaptation solutions"
+                self.G, {effectNode: node_adaptation_solutions}, "adaptation solutions"
             )
 
             # add solution sources field to all adaptation solution nodes
             for solution in node_adaptation_solutions:
-                sources = solution_sources(G.nodes[solution], SOURCE_TYPES)
+                sources = solution_sources(self.G.nodes[solution])
                 nx.set_node_attributes(
-                    G,
+                    self.G,
                     {solution: sources},
                     "solution sources",
                 )
             total_adaptation_nodes.extend(node_adaptation_solutions)
 
-        subgraph_adaptations = B_annotated.subgraph(total_adaptation_nodes).copy()
+        subgraph_adaptations = self.B_annotated.subgraph(total_adaptation_nodes).copy()
 
         subgraph_upstream_mitigations = union_subgraph(
-            [subgraph_upstream, subgraph_mitigation], base_graph=B_annotated
+            [self.subgraph_upstream, self.subgraph_mitigation], base_graph=self.B_annotated
         ).copy()
 
         # Computes an array of elements + nodes to input into cytoscape.js for each personal value
@@ -591,7 +612,7 @@ class MakeGraph:
 
         personal_values = [
             label
-            for label, pv_ranking in G.nodes.data("personal_values_10", [None])
+            for label, pv_ranking in self.G.nodes.data("personal_values_10", [None])
             if any(pv_ranking)
         ]
 
@@ -615,8 +636,10 @@ class MakeGraph:
             )
             graph_downstream_adaptations_pv[value_key] = subtree.copy()
     
-        return subgraph_upstream_mitigations, subgraph_downstream_adaptations, subgraph_upstream, subgraph_downstream, graph_downstream_adaptations_pv
-        
+        return subgraph_upstream_mitigations, subgraph_downstream_adaptations, self.subgraph_upstream, subgraph_downstream, graph_downstream_adaptations_pv
+
+    def get_myths(self):
+        return self.all_myths
 
 
 

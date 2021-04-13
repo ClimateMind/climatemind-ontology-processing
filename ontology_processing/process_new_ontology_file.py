@@ -27,7 +27,7 @@ def processOntology(onto_path, output_folder_path):
     make_network.outputEdges(onto_path=onto_path, output_path=csv_path, source=None)
 
     # from the network edges, make a networkx graph and save as a pickle file
-    make_graph.makeGraph(onto_path, csv_path, output_folder_path)
+    make_graph.make_graph(onto_path, csv_path, output_folder_path)
 
 
 def main(args):
