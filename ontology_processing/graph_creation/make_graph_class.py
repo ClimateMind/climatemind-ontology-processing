@@ -115,7 +115,7 @@ class MakeGraph:
             self.add_classes(attributes_dict, ontology_node)
             self.add_properties(attributes_dict, ontology_node, annot_properties, data_properties)
             self.add_personal_values(attributes_dict)
-            self.add_radical_political(attributes_dict)
+            #self.add_radical_political(attributes_dict)
             self.G.add_nodes_from([(node, attributes_dict)])
 
     def add_basic_info(self, attributes_dict, ontology_node):
@@ -287,7 +287,7 @@ class MakeGraph:
                 raise Exception("Node found that has opposing vector values 1 and -1")
         return final
 
-    def add_radical_political(self, attributes_dict):
+    def add_radical_political(self, solution):
         """
         In order to prevent a backfire effect (user is persuaded AGAINST solutions),
         we want to avoid serving nodes with strong political ties that conflict
@@ -296,9 +296,10 @@ class MakeGraph:
         These are in a hardcoded order (conservative first, liberal second). The
         order should not be changed as it's used by the climatemind-backend app.
         """
-        conservative = attributes_dict["data_properties"]["conservative"]
-        liberal = attributes_dict["data_properties"]["liberal"]
-        attributes_dict["political_value"] = [conservative, liberal]
+        conservative = self.G.nodes[solution]["data_properties"]["conservative"]
+        liberal = self.G.nodes[solution]["data_properties"]["liberal"]
+        nx.set_node_attributes(self.G, {solution: conservative}, "conservative")
+        nx.set_node_attributes(self.G, {solution: liberal}, "liberal")
 
     def set_edge_properties(self):
         """
@@ -463,6 +464,7 @@ class MakeGraph:
                 ]["CO2_eq_reduced"]
             elif solution not in mitigation_solutions_no_co2:
                 mitigation_solutions_no_co2.append(solution)
+            self.add_radical_political(solution)
 
         mitigation_solutions_co2_sorted = sorted(
             mitigation_solutions_with_co2,
