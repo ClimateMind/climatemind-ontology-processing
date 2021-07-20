@@ -8,41 +8,34 @@ import owlready2
 from owlready2 import sync_reasoner
 from collections import OrderedDict
 
-try:
-    from graph_creation.ontology_processing_utils import (
-        give_alias,
-        save_test_ontology_to_json,
-        save_graph_to_pickle,
-        get_valid_test_ont,
-        get_non_test_ont,
-        remove_non_test_nodes,
-        get_test_ontology,
-        get_source_types,
-        solution_sources,
-        listify,
-        union_subgraph,
-        custom_bfs,
-    )
-except ImportError:
-    from ontology_processing.graph_creation.ontology_processing_utils import (
-        give_alias,
-        save_test_ontology_to_json,
-        save_graph_to_pickle,
-        get_valid_test_ont,
-        get_non_test_ont,
-        remove_non_test_nodes,
-        get_test_ontology,
-        get_source_types,
-        solution_sources,
-        listify,
-        union_subgraph,
-        custom_bfs,
-    )
-
-# Set a lower JVM memory limit
-owlready2.reasoning.JAVA_MEMORY = 500
+from graph_creation.ontology_processing_utils import (
+    give_alias,
+    save_test_ontology_to_json,
+    save_graph_to_pickle,
+    get_valid_test_ont,
+    get_non_test_ont,
+    remove_non_test_nodes,
+    get_test_ontology,
+    get_source_types,
+    solution_sources,
+    listify,
+    union_subgraph,
+)
 
 class MakeGraph:
+
+    """
+    Takes an XML/RDF OWL file, extracts all of the nodes and relationships
+    and loads these into a NetworkX Graph Object which is used for the Climatemind-Backend
+    application.
+
+    This complete graph contains all nodes from the Ontology, including Climate Issues, Myths, and Solutions
+    which are used to populate the user feed in the user-facing application.
+
+    There may be some benefit in splitting up this file into smaller chunks in the future, but for now this
+    should be relatively digestible.
+    """
+
     def __init__(self, onto_path, edge_path, output_folder_path="."):
         self.onto_path = onto_path
         self.edge_path = edge_path
@@ -51,11 +44,8 @@ class MakeGraph:
         self.object_properties = None
         self.annot_properties = None
         self.data_properties = None
-        self.all_myths = None
         self.G = nx.DiGraph()
         self.B = None
-        self.B_annotated = None
-        self.subgraph_upstream = None
         self.superclasses = None
         self.subgraph_mitigation = None
 
@@ -68,7 +58,8 @@ class MakeGraph:
 
     def set_properties(self):
         """
-        Format object properties and annotation properties into Python readable names.
+        Format object properties and annotation properties into Python readable names, so
+        they can be referenced in the rest of the code.
         """
         self.obj_properties = list(self.onto.object_properties())
         self.annot_properties = list(self.onto.annotation_properties())
@@ -80,11 +71,21 @@ class MakeGraph:
     def automate_reasoning(self):
         """
         Run automated reasoning
+
+        OWL reasoners can be used to check the consistency of an ontology,
+        and to deduce new fact in the ontology. Typically be reclassing Individuals to new Classes, 
+        and Classes to new superclasses, depending on their relations.
         """
+        # Set a lower JVM memory limit
+        owlready2.reasoning.JAVA_MEMORY = 500
         with self.onto:
             sync_reasoner()
 
     def add_edges_to_graph(self):
+        """
+        Converts OWL file edges to NetworkX Graph Edges
+        Edges are connections between two nodes
+        """
         df_edges = pd.read_csv(self.edge_path)
         for src, tgt, kind in df_edges.values:
             self.G.add_edge(src, tgt, type=kind, properties=None)
@@ -107,12 +108,14 @@ class MakeGraph:
             if thing.label
         ]
 
+        # Each node has an attributes dictionary that contains all of the data for that node.
+        # Here we add all of these attributes to the dictionary
         for node in list(self.G.nodes):
             ontology_node = self.onto.search_one(label=node)
 
             attributes_dict = {}
             self.add_basic_info(attributes_dict, ontology_node)
-            self.add_classes(attributes_dict, ontology_node)
+            self.add_ontology_classes(attributes_dict, ontology_node)
             self.add_properties(attributes_dict, ontology_node, annot_properties, data_properties)
             self.add_personal_values(attributes_dict)
             self.add_radical_political(attributes_dict)
@@ -123,9 +126,9 @@ class MakeGraph:
         attributes_dict["iri"] = str(ontology_node)
         attributes_dict["comment"] = str(ontology_node.comment)
 
-    def add_classes(self, attributes_dict, ontology_node):
+    def add_ontology_classes(self, attributes_dict, ontology_node):
         """
-        TODO: Kameron to add docstring (Please use simple explanation as class is a generic word)
+        Specifically, all the classes that node directly belongs to and all the ancestor nodes classes that the node should inherit.
         """
         class_objects = self.onto.get_parents_of(ontology_node)
         attributes_dict["direct classes"] = listify(class_objects, self.onto)
@@ -375,17 +378,19 @@ class MakeGraph:
     def get_graph(self):
         return self.G
 
-    def make_annotated(self):
+    def get_annotated(self):
         """
         Create an annotated graph used for visualization
         """
-        self.all_myths = list(nx.get_node_attributes(self.B, "myth").keys())
+        all_myths = list(nx.get_node_attributes(self.B, "myth").keys())
 
         # Copy B to make annotations specific to visualizations
-        self.B_annotated = self.B.copy()
+        annotated_graph = self.B.copy()
 
         # Myths not necessary to visualize
-        self.B_annotated.remove_nodes_from(myth for myth in self.all_myths)
+        annotated_graph.remove_nodes_from(myth for myth in all_myths)
+
+        return annotated_graph
 
     def make_acyclic(self):
         """
@@ -431,8 +436,24 @@ class MakeGraph:
         with the nodes found in nodes_upstream_greenhouse_effect 
         (these nodes should all be the mitigation solutions)
         """
-        nodes_upstream_greenhouse_effect = list(self.subgraph_upstream.nodes())
-        mitigation_solutions = list()
+        # feedback loop edges should be severed in the graph copy B
+        edges_upstream_greenhouse_effect = nx.edge_dfs(
+            self.B, "increase in greenhouse effect", orientation="reverse"
+        )
+
+        nodes_upstream_greenhouse_effect = []
+        for edge in edges_upstream_greenhouse_effect:
+            node_a = edge[0]
+            node_b = edge[1]
+            if self.B[node_a][node_b]["type"] == "causes_or_promotes":
+                nodes_upstream_greenhouse_effect.append(node_a)
+                nodes_upstream_greenhouse_effect.append(node_b)
+
+            # get unique ones
+        nodes_upstream_greenhouse_effect = list(
+            OrderedDict.fromkeys(nodes_upstream_greenhouse_effect)
+        )  # this shouldn't include myths!
+        mitigation_solutions = []
 
         # Iterates through all edges incident to nodes in upstream_greenhouse_effect
         for start, end, type in self.B.out_edges(nodes_upstream_greenhouse_effect, "type"):
@@ -440,7 +461,6 @@ class MakeGraph:
                 mitigation_solutions.append(end)
 
         mitigation_solutions = list(set(mitigation_solutions))
-        self.subgraph_mitigation = self.B_annotated.subgraph(mitigation_solutions)
         return mitigation_solutions, nodes_upstream_greenhouse_effect
 
     def add_mitigations(self, mitigation_solutions):
@@ -492,74 +512,13 @@ class MakeGraph:
                     "solution sources",
                 )
 
-    def annotate_graph_with_problems(self):
-        """
-        Annotates a graph with information needed for visualization. 
-        For example, which nodes are solutions, risks. Which
-        nodes have long descriptions, sources. Which edges have sources.
-        """
-        for start, end, data in self.B_annotated.edges(data=True):
-            edge_attr = self.B_annotated.edges[start, end]
-
-            # cyto_classes attribute is simply a placeholder.
-            # We'll convert all elements from cyto_classes to cytoscape.js classes in visualize.py script
-            edge_attr["cyto_classes"] = []
-            if "risk solution" in self.B_annotated.nodes[start] or "risk solution" in self.B_annotated.nodes[end]:
-                edge_attr["cyto_classes"].append("solution-edge")
-            elif not data["properties"]:
-                # Edge is not connecting to risk solution! Check if it has sources.
-                edge_attr["cyto_classes"].append("edge-no-source")
-
-        # Extract x y positions using graphviz dot algo. Use x,y positions to make cytoscape graph
-        # Also doing some preprocessing
-        for node, data in self.B_annotated.nodes(data=True):
-
-            self.B_annotated.nodes[node]["cyto_classes"] = []
-
-            risk_or_personal_value_node = False
-            if "risk solution" in data:
-                self.B_annotated.nodes[node]["cyto_classes"].append("risk-solution")
-
-            if any(data["personal_values_10"]):
-                self.B_annotated.nodes[node]["cyto_classes"].append("personal-value")
-
-            if risk_or_personal_value_node:
-                if data.get("properties", {}).get("schema_longDescription", ""):
-                    self.B_annotated.nodes[node]["cyto_classes"].append("no-long-description")
-
-                for source in SOURCE_TYPES:
-                    if data["properties"][source]:
-                        self.B_annotated.nodes[node]["cyto_classes"].append("node-no-sources")
-
-    
-    def create_subgraph(self):
-        self.subgraph_upstream = custom_bfs(
-            self.B_annotated, "increase in greenhouse effect", "reverse"
-        ).copy()
-
-    def get_subgraphs_for_viz(self):
-        """
-        Get all the nodes that are downstream of 'increase in greenhouse effect'. 
-        should be all the impact/effect node... could probably get these by doing 
-        a class search too. Also includes nodes that are "has exposure dependencies of", 
-        like "person is in the marines", 'person is in a community likely without air conditioning', or
-        'person is elderly' so not exclusive to risks + adaptations.
-        This subgraph also contains cytoscape annotations (like cyto_classes), 
-        so shouldn't query the properties as they are not reflective of webprotege.
-        """
-        subgraph_downstream_adaptations = custom_bfs(
-            self.B_annotated, "increase in greenhouse effect", edge_type="any"
-        ).copy()
-
-        # The only difference between subgraph_downstream_adaptations and subgraph_downstream is that my
-        # subgraph_downstream excludes all adaptation solutions.
-        # Only "causation" edges would exclude "person is elderly" or "person is outside often"
-        subgraph_downstream = custom_bfs(
-            self.B_annotated, "increase in greenhouse effect", edge_type="causes_or_promotes"
-        ).copy()
+    def process_node_identity(self):
+        downstream_nodes = nx.dfs_edges(self.B, "increase in greenhouse effect")
+        downstream_nodes = [item for sublist in downstream_nodes for item in sublist]
+        nodes_downstream_greenhouse_effect = list(OrderedDict.fromkeys(downstream_nodes))
 
         total_adaptation_nodes = []
-        for effectNode in subgraph_downstream_adaptations.nodes():
+        for effectNode in nodes_downstream_greenhouse_effect:
             intermediate_nodes = nx.all_simple_paths(
                 self.B, "increase in greenhouse effect", effectNode
             )
@@ -570,18 +529,15 @@ class MakeGraph:
             intermediate_nodes = list(
                 dict.fromkeys(intermediate_nodes)
             )  # gets unique nodes
-            node_adaptation_solutions = list()
-            for intermediateNode in intermediate_nodes:
-                node_neighbors = self.G.neighbors(intermediateNode)
+            node_adaptation_solutions = []
+            for intermediate_node in intermediate_nodes:
+                node_neighbors = self.G.neighbors(intermediate_node)
                 for neighbor in node_neighbors:
                     if (
-                        self.G[intermediateNode][neighbor]["type"]
+                        self.G[intermediate_node][neighbor]["type"]
                         == "is_inhibited_or_prevented_or_blocked_or_slowed_by"
                     ):  # bad to hard code in 'is_inhibited_or_prevented_or_blocked_or_slowed_by'
                         node_adaptation_solutions.append(neighbor)
-            # add the adaptation solutions to the networkx object for the node
-            # be sure that solutions don't show up as effectNodes! and that they aren't solutions to themself! the code needs to be changed to avoid this.
-            # ^solutions shouldn't be added as solutions to themself!
             node_adaptation_solutions = list(
                 OrderedDict.fromkeys(node_adaptation_solutions)
             )  # gets unique nodes
@@ -600,47 +556,7 @@ class MakeGraph:
                     "solution sources",
                 )
             total_adaptation_nodes.extend(node_adaptation_solutions)
-
-        subgraph_adaptations = self.B_annotated.subgraph(total_adaptation_nodes).copy()
-
-        subgraph_upstream_mitigations = union_subgraph(
-            [self.subgraph_upstream, self.subgraph_mitigation], base_graph=self.B_annotated
-        ).copy()
-
-        # Computes an array of elements + nodes to input into cytoscape.js for each personal value
-        # Computes the subgraphs achieved by BFS through each of those personal values
-
-        personal_values = [
-            label
-            for label, pv_ranking in self.G.nodes.data("personal_values_10", [None])
-            if any(pv_ranking)
-        ]
-
-        # Uncomment to reduce number of cases for faster debug.
-        # personal_values = ['increase in physical violence']
-
-        graph_downstream_adaptations_pv = dict.fromkeys(personal_values)
-
-        # Make a temporary graph with reversed solutions for easier BFS
-        G_slns_reversed = subgraph_downstream_adaptations.copy()
-
-        # Modifying edge data while iterating. Have to get list before we iterate.
-        g_edges = list(G_slns_reversed.edges(data=True))
-        for start, end, data in g_edges:
-            if subgraph_adaptations.has_node(end):
-                G_slns_reversed.add_edge(end, start, **data)
-                G_slns_reversed.remove_edge(start, end)
-        for value_key in personal_values:
-            subtree = custom_bfs(
-                G_slns_reversed, value_key, direction="reverse", edge_type="any"
-            )
-            graph_downstream_adaptations_pv[value_key] = subtree.copy()
-    
-        return subgraph_upstream_mitigations, subgraph_downstream_adaptations, self.subgraph_upstream, subgraph_downstream, graph_downstream_adaptations_pv
-
-    def get_myths(self):
-        return self.all_myths
-
+        return total_adaptation_nodes
 
 
 

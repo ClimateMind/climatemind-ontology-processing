@@ -1,18 +1,17 @@
 import validators
 import networkx as nx
 
-try:
-    from graph_creation.ontology_processing_utils import (
-        get_source_types,
-    )
-except ImportError:
-    from ontology_processing.graph_creation.ontology_processing_utils import (
-        get_source_types,
-    )
+from graph_creation.ontology_processing_utils import (
+    get_source_types,
+)
 
 class ProcessCausalSources:
     """
-    TODO: Kameron to add docstring about what causal sources are
+    Causal sources are sources that belong to the cause_effect edge relation. 
+    They aren’t sources that prove existence of a node. 
+    They are sources that prove existence of the cause_effect relationship between 2 nodes. 
+    These sources are identified in the OWL ontology when they are the same source curated 
+    on 2 neighboring nodes that are also connected by the cause_effect relation.
     """
     def __init__(self, G):
         self.G = G
@@ -34,7 +33,7 @@ class ProcessCausalSources:
         Get list nodes that have a relationship with the target node (are neighbor nodes), 
         then filter it down to just the nodes with the causal relationship with the target node
         """
-        self.causal_sources = list()
+        self.causal_sources = []
         predecessor_nodes = self.G.predecessors(target_node)
         for predecessor_node in predecessor_nodes:
             if self.G[predecessor_node][target_node]["type"] == "causes_or_promotes":
@@ -48,7 +47,7 @@ class ProcessCausalSources:
         Collapse down to just list of unique urls. Strips off the type of source
         and the edge it originates from
         """
-        sources_list = list()
+        sources_list = []
 
         for sources_dict in self.causal_sources:
             for key in sources_dict:

@@ -3,12 +3,8 @@
 import os
 import argparse
 
-try:
-    import graph_creation.make_network as make_network
-    import graph_creation.make_graph as make_graph
-except ImportError:
-    import ontology_processing.graph_creation.make_network as make_network
-    import ontology_processing.graph_creation.make_graph as make_graph
+import graph_creation.make_network as make_network
+import graph_creation.make_graph as make_graph
 
 
 def processOntology(onto_path, output_folder_path):

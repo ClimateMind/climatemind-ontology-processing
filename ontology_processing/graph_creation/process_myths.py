@@ -1,14 +1,9 @@
 import networkx as nx
 from collections import OrderedDict
 
-try:
-    from graph_creation.ontology_processing_utils import (
-        get_source_types,
-    )
-except ImportError:
-    from ontology_processing.graph_creation.ontology_processing_utils import (
-        get_source_types,
-    )
+from graph_creation.ontology_processing_utils import (
+    get_source_types,
+)
 
 class ProcessMyths:
     """
@@ -16,19 +11,19 @@ class ProcessMyths:
     solution and others are common myths not attached to a solution. Both need to
     be added to the NetworkX object for use by the API.
     """
-    def __init__(self, G, all_myths):
+    def __init__(self, G):
         self.G = G
         self.source_types = get_source_types()
         self.general_myths = None
-        self.all_myths = all_myths
     
     def process_myths(self, subgraph_downstream_adaptations, nodes_upstream_greenhouse_effect):
         """
         Structures myth data in NetworkX object to be easier for API use.
         """
         general_myths = list()
+        all_myths = list(nx.get_node_attributes(self.G, "myth").keys())
 
-        for myth in self.all_myths:
+        for myth in all_myths:
             node_neighbors = self.G.neighbors(myth)
             for neighbor in node_neighbors:
                 if self.G[myth][neighbor]["type"] == "is_a_myth_about":
@@ -44,8 +39,6 @@ class ProcessMyths:
                         nx.set_node_attributes(
                             self.G, {neighbor: solution_myths}, "solution myths"
                         )
-                    for s in subgraph_downstream_adaptations:
-                        print(s)
                     if subgraph_downstream_adaptations.has_node(neighbor):
                         if "impact myths" not in self.G.nodes[neighbor].keys():
                             impact_myths = []
