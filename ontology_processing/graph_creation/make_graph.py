@@ -8,7 +8,7 @@ import owlready2
 from owlready2 import sync_reasoner
 from collections import OrderedDict
 
-from graph_creation.ontology_processing_utils import (
+from ontology_processing.graph_creation.ontology_processing_utils import (
     give_alias,
     save_test_ontology_to_json,
     save_graph_to_pickle,
@@ -17,10 +17,10 @@ from graph_creation.ontology_processing_utils import (
     remove_non_test_nodes,
     get_test_ontology,
 )
-from graph_creation.process_visualization import ProcessVisualization
-from graph_creation.process_myths import ProcessMyths
-from graph_creation.process_causal_sources import ProcessCausalSources
-from graph_creation.make_graph_class import MakeGraph
+from ontology_processing.graph_creation.process_visualization import ProcessVisualization
+from ontology_processing.graph_creation.process_myths import ProcessMyths
+from ontology_processing.graph_creation.process_causal_sources import ProcessCausalSources
+from ontology_processing.graph_creation.make_graph_class import MakeGraph
 
 # Set a lower JVM memory limit
 owlready2.reasoning.JAVA_MEMORY = 500

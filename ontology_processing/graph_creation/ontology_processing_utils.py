@@ -180,7 +180,7 @@ def _save_graph_helper(G, outfile_path, fname="Climate_Mind_DiGraph", ext=".gpic
         ".gexf": nx.write_gexf,
         ".gml": nx.write_gml,
         ".graphml": nx.write_graphml,
-        ".yaml": nx.write_yaml,
+        #".yaml": nx.write_yaml,
         ".json": lambda g, f: f.write(json_graph.jit_data(g, indent=4)),
     }
     mode = "wb"
@@ -207,8 +207,8 @@ def save_graph_to_graphml(G, outfile_path, fname="Climate_Mind_DiGraph"):
     _save_graph_helper(G, outfile_path, fname, ext=".graphml")
 
 
-def save_graph_to_yaml(G, outfile_path, fname="Climate_Mind_DiGraph"):
-    _save_graph_helper(G, outfile_path, fname, ext=".yaml")
+#def save_graph_to_yaml(G, outfile_path, fname="Climate_Mind_DiGraph"):
+#    _save_graph_helper(G, outfile_path, fname, ext=".yaml")
 
 
 def save_graph_to_json(G, outfile_path, fname="Climate_Mind_DiGraph"):

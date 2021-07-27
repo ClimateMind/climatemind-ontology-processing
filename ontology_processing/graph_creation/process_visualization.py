@@ -1,6 +1,6 @@
 import pickle
 
-from graph_creation.ontology_processing_utils import custom_bfs, union_subgraph
+from ontology_processing.graph_creation.ontology_processing_utils import custom_bfs, union_subgraph
 
 class ProcessVisualization:
 

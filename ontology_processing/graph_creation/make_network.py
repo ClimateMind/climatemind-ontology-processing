@@ -3,11 +3,7 @@ import argparse
 import pandas as pd
 from owlready2 import *
 
-try:
-    from graph_creation.network_class import Network
-except ImportError:
-    from ontology_processing.graph_creation.network_class import Network
-
+from ontology_processing.graph_creation.network_class import Network
 
 def test_answer():
     assert search_node(get_ontology(onto_path).load()) == []

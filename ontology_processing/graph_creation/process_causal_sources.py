@@ -1,7 +1,7 @@
 import validators
 import networkx as nx
 
-from graph_creation.ontology_processing_utils import (
+from ontology_processing.graph_creation.ontology_processing_utils import (
     get_source_types,
 )
 
